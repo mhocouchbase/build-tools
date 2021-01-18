@@ -38,6 +38,11 @@ if [ "${PLATFORM}" == "macos" ]; then
     export PLATFORM=macosx
 fi
 
+#use uname to determine ARCH.  for M1 (DARWIN 20.x+), it should return arm64
+if [ "${PLATFORM}" == "macosx" ]; then
+    export ARCH=`uname -m`
+fi
+
 # Backwards compatibility for old naming of Server cbdeps
 if [ "${PROFILE}" != "server" ]; then
     export BLD_NUM="${PROFILE}${BLD_NUM}"
