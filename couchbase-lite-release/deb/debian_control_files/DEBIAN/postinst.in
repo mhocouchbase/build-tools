@@ -1,0 +1,17 @@
+#!/bin/bash
+
+gpg --import /etc/apt/trusted.gpg.d/couchbase-gpg.asc
+
+apt_version=$(apt --version 2>/dev/null | head -1 | awk '{print $2}')
+[[ ${apt_version} == "" ]] && apt_version="0.0.0"
+
+distrib=$(lsb_release -c | awk '{print $2}')
+
+if ! [[ ${distrib} =~ ^(%DISTRO_CODENAMES%)$ ]]; then
+    echo "Supported platforms are: %DISTRO_CODENAMES%"
+    exit 1
+else
+    sed -e "s/%DCODE_SERVER%/${distrib}/g" -e "s/%DCODE_SDK%/${distrib}/g" \
+        -i /etc/apt/sources.list.d/couchbase-lite.list
+    exit 0
+fi

@@ -1,0 +1,2 @@
+deb http://%BETA%packages%STAGING%.couchbase.com/releases/couchbase-lite-repo/enterprise/deb/ %DCODE_SERVER% %DCODE_SERVER%/main
+deb http://%BETA%packages%STAGING%.couchbase.com/releases/couchbase-lite-repo/community/deb/ %DCODE_SERVER% %DCODE_SERVER%/main
