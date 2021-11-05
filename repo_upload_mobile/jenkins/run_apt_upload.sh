@@ -9,6 +9,8 @@ docker pull couchbasebuild/ubuntu-1604-apt-upload:latest
 cd /home/couchbase/repo_upload
 rm -rf product-metadata
 git clone git://github.com/couchbase/product-metadata > /dev/null
+rm product-metadata/couchbase-lite-c/repo_upload/apt.json
+cp ${WORKSPACE}/build-tools/repo_upload_mobile/jenkins/apt.json product-metadata/couchbase-lite-c/repo_upload/.
 
 echo
 echo "Uploading Debian packages for Couchbase Server releases..."
