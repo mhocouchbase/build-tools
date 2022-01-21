@@ -10,7 +10,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 UPDATE_EDITION=
 FORCE=
-REPO=ssh://git@github.com/couchbase/docker
+REPO=ssh://git@github.com/mhocouchbase/docker
 while getopts ":p:v:e:ufr:" opt; do
   case ${opt} in
     p)
@@ -63,7 +63,7 @@ fi
 # Only commit this change if it actually changed something
 git diff-index --quiet HEAD || \
     git commit -m "${VERB} ${PRODUCT} ${EDITION} ${VERSION}"
-git push origin HEAD:refs/heads/master
+#git push origin HEAD:refs/heads/master
 
 status "Checking Dockerhub autobuild branch"
 # 7.1.0+ supports both x86_64 and aarch64.
@@ -90,11 +90,13 @@ rm -rf branch
 mv ../branch .
 git add branch
 git commit --allow-empty -m "${VERB} branch ${BRANCH} for Docker Hub autobuild"
-git push origin ${BRANCH}:refs/heads/${BRANCH}
+#git push origin ${BRANCH}:refs/heads/${BRANCH}
 if [ "${UPDATE_EDITION}" = "true" ]; then
-    git push --force origin ${BRANCH}:refs/heads/${PRODUCT}-${EDITION}
+    #git push --force origin ${BRANCH}:refs/heads/${PRODUCT}-${EDITION}
+    echo "origin ${BRANCH}:refs/heads/${PRODUCT}-${EDITION}"
     if [ "$EDITION" = "enterprise" ]; then
-        git push --force origin ${BRANCH}:refs/heads/${PRODUCT}-latest
+        #git push --force origin ${BRANCH}:refs/heads/${PRODUCT}-latest
+        echo "origin ${BRANCH}:refs/heads/${PRODUCT}-latest"
     fi
 fi
 git checkout master

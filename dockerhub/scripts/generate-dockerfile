@@ -13,7 +13,7 @@ usage() {
 
 # Read and verify command-line parameters
 FORCE=false
-REPO=ssh://git@github.com/couchbase/docker
+REPO=ssh://git@github.com/mhocouchbase/docker
 while getopts ":p:v:e:fr:" opt; do
   case ${opt} in
     p)

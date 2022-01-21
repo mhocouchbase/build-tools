@@ -32,15 +32,15 @@ docker_build_publish() {
 
     # Publish to S3 if desired (Jenkins job will handle copying to
     # internal release mirror)
-    if [ "${UPLOAD_TO_S3}" = "true" ]; then
-        S3_PATH=s3://packages.couchbase.com/releases/${PRODUCT_DIR}${VERSION}
-        aws s3 cp ${OUTPUT} ${S3_PATH}/${OUTPUT} --acl public-read
-        aws s3 cp ${OUTPUT}.sha256 ${S3_PATH}/${OUTPUT}.sha256 --acl public-read
-    fi
+    #if [ "${UPLOAD_TO_S3}" = "true" ]; then
+        #S3_PATH=s3://packages.couchbase.com/releases/${PRODUCT_DIR}${VERSION}
+        #aws s3 cp ${OUTPUT} ${S3_PATH}/${OUTPUT} --acl public-read
+        #aws s3 cp ${OUTPUT}.sha256 ${S3_PATH}/${OUTPUT}.sha256 --acl public-read
+    #fi
 }
 
 ARCH=x86_64
-REPO=ssh://git@github.com/couchbase/docker
+REPO=ssh://git@github.com/mhocouchbase/docker
 FORCE=
 UPLOAD_TO_S3=
 while getopts ":p:i:v:e:a:fur:" opt; do
