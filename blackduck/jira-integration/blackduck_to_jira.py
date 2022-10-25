@@ -42,7 +42,8 @@ def get_notification_info(notification, notification_type):
                               'project_version': affected_version['projectVersionName'],
                               'project_version_url': affected_version['projectVersion'],
                               'notification_type': notification_type,
-                              'date': notification['createdAt'].replace('Z', '-0800')
+                              #'date': notification['createdAt'].replace('Z', '-800')
+                              'date': notification['createdAt']
         })
     return n
 
@@ -196,9 +197,11 @@ def update_jira_issue(jira, notification, issue):
                             ticket_cves.remove(t_cve)
 
             if not ticket_cves_list:
-                jira.transition_issue(issue, config.JIRA['done'], notification['date']) #transition to DONE
+                print(f'close ticket {issue.key}')
+                #jira.transition_issue(issue, config.JIRA['done'], notification['date']) #transition to DONE
                 return
             else:
+                print(f'update ticket {issue.key}')
                 ticket_fields=update_ticket_fields (notification, ticket_cves_list, ticket_cves, detail_sum, detail_files)
 
     if notification['notification_type'] == 'updatedVulnerabilityIds':
@@ -210,11 +213,11 @@ def update_jira_issue(jira, notification, issue):
                                     'link': n['link']})
         ticket_fields=update_ticket_fields (notification, ticket_cves_list, ticket_cves, detail_sum, detail_files)
 
-    if ticket_needs_update :
-        jira.update_issue(issue, ticket_fields)
-        if issue.fields.status.name in ['Done', 'Not Applicable', 'Mitigated']:
-            if notification['severity'] != 'LOW':
-                jira.transition_issue(issue, config.JIRA['to_do'], notification['date']) #transition to TO DO
+    #if ticket_needs_update :
+        #jira.update_issue(issue, ticket_fields)
+        #if issue.fields.status.name in ['Done', 'Not Applicable', 'Mitigated']:
+            #if notification['severity'] != 'LOW':
+                #jira.transition_issue(issue, config.JIRA['to_do'], notification['date']) #transition to TO DO
 
 parser = argparse.ArgumentParser('Retreive vulnerability notifications')
 parser.add_argument('-p', '--project_name', required=True, help='Search notifications for this project.')
@@ -300,27 +303,15 @@ for n in update_notifications:
 
 cve_dicts=blackduck.create_cve_dicts(list(set(all_cves_list)))
 
-scan_notification_jira_entries = jira_entries(unique_scan_notifications, cve_dicts)
+#scan_notification_jira_entries = jira_entries(unique_scan_notifications, cve_dicts)
 update_notification_jira_entries = jira_entries(update_notifications, cve_dicts)
 
+
+with open('test.log', 'w') as f:
+    json.dump(update_notification_jira_entries, f)
+exit()
+
 jira=JiraRestApi()
-for entry in scan_notification_jira_entries:
-    issues = jira.search_issues(config.JIRA['project'],
-                              entry['component_name'],
-                              entry['version'],
-                              entry['project_name'],
-                              entry['project_version']
-                             )
-    if len(issues) > 1:
-        logging.error('More than one issue is found:')
-        for issue in issues:
-            logging.error(issue.key)
-    else:
-        issue=next(issues, None)
-        if entry['notification_type'] == 'newVulnerabilityIds':
-            open_jira_issue(jira, entry, issue)
-        if issue and entry['notification_type'] == 'deletedVulnerabilityIds':
-            close_jira_issue(jira, entry, issue)
 
 for entry in update_notification_jira_entries:
     issues = jira.search_issues(config.JIRA['project'],
@@ -334,6 +325,7 @@ for entry in update_notification_jira_entries:
         for issue in issues:
             logging.error(issue.key)
     elif len(issues) == 0:
-        open_jira_issue(jira, entry, None)
+        print("open jira ticket")
+        #open_jira_issue(jira, entry, None)
     else:
         update_jira_issue(jira, entry, next(issues))

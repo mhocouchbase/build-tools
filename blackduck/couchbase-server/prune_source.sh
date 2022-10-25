@@ -52,6 +52,7 @@ rm -rf goproj/src/github.com/couchbase/indexing/secondary/docs
 rm -f tlm/cmake/Modules/rebar
 
 # General-purpose removal of test data, examples, docs, etc.
+echo "prune unwant directories"
 find . -name analytics -prune -o -type d -name test\* -print0 | xargs -0 rm -rf
 find . -name analytics -prune -o -type d -name testdata -print0 | xargs -0 rm -rf
 find . -name analytics -prune -o -type d -name gtest -print0 | xargs -0 rm -rf

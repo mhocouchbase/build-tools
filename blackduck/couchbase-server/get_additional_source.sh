@@ -107,6 +107,7 @@ for dir in gen/nftp/client evaluator/impl/gen/parser; do
 done
 
 # Also work around sloppy go.mod files
+echo "run go mod tidy"
 for gomod in $(find . -name go.mod); do
     pushd $(dirname ${gomod})
     grep --quiet require go.mod || {
@@ -124,3 +125,7 @@ WARNING: ${gomod} has out of date go.sum!!!!!!!
 EOF
     popd
 done
+pushd ~/workspace/ming-test9/src/goproj/src/github.com/couchbase/indexing
+go version
+go mod tidy
+popd
