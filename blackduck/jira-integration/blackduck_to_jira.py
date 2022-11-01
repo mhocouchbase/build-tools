@@ -129,10 +129,10 @@ def open_jira_issue(jira, notification, issue=None):
 def close_jira_issue(jira, notification, issue):
     logging.info('Checking to see if %s needs to be closed.', issue.key)
     # Let's make sure we don't process an older scan.
-    if getattr(issue.fields, config.JIRA['BD_LAST_UPDATE']) > notification['date']:
-        logging.info('%s BD_LAST_UPDATE is newer than %s, skipped', issue.key, notification['date'])
-    elif issue.fields.status.name not in ['Done', 'Not Applicable', 'Mitigated', 'Component Not Applicable']:
-        jira.transition_issue(issue, config.JIRA['done'], notification['date']) #transition to DONE
+    #if getattr(issue.fields, config.JIRA['BD_LAST_UPDATE']) > notification['date']:
+        #logging.info('%s BD_LAST_UPDATE is newer than %s, skipped', issue.key, notification['date'])
+    #elif issue.fields.status.name not in ['Done', 'Not Applicable', 'Mitigated', 'Component Not Applicable']:
+        #jira.transition_issue(issue, config.JIRA['done'], notification['date']) #transition to DONE
 
 def update_ticket_fields (notification, ticket_cves_list, ticket_cves, detail_sum, detail_files):
     ticket_detail_cves = ''
@@ -318,22 +318,8 @@ for entry in scan_notification_jira_entries:
     else:
         issue=next(issues, None)
         if entry['notification_type'] == 'newVulnerabilityIds':
-            open_jira_issue(jira, entry, issue)
+            #open_jira_issue(jira, entry, issue)
+            print("try to open a new issue or reopen an existing issue", entry['component_name'])
         if issue and entry['notification_type'] == 'deletedVulnerabilityIds':
+            print("close an issue", entry['component_name'])
             close_jira_issue(jira, entry, issue)
-
-for entry in update_notification_jira_entries:
-    issues = jira.search_issues(config.JIRA['project'],
-                              entry['component_name'],
-                              entry['version'],
-                              entry['project_name'],
-                              entry['project_version']
-                             )
-    if len(issues) > 1:
-        logging.error('More than one issue is found:')
-        for issue in issues:
-            logging.error(issue.key)
-    elif len(issues) == 0:
-        open_jira_issue(jira, entry, None)
-    else:
-        update_jira_issue(jira, entry, next(issues))
