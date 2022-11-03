@@ -30,6 +30,9 @@ echo 'addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")' 
 
 # Blackduck doesn't support buildless scan of scala project as of 7.0.0
 # Hence, we need to build it before passing the project through the scanner.
+if [[ $VERSION == "3.1.0" || $VERSION == "3.0.0" ]]; then
+    echo -en '\nlibraryDependencies += "com.fasterxml.jackson.core" % "jackson-core" % "2.13.4"' >> build.sbt
+fi
 ../../extra/sbt/bin/sbt clean compile
 
 popd
