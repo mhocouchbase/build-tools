@@ -67,7 +67,8 @@ fi
 
 DMG_URL_DIR=http://latestbuilds.service.couchbase.com/builds/latestbuilds/couchbase-server/${RELEASE}/${BLD_NUM}
 
-DMGS=(couchbase-server-enterprise_${VERSION}-${BLD_NUM}-macos_x86_64-unnotarized.dmg couchbase-server-community_${VERSION}-${BLD_NUM}-macos_x86_64-unnotarized.dmg)
+#DMGS=(couchbase-server-enterprise_${VERSION}-${BLD_NUM}-macos_x86_64-unnotarized.dmg couchbase-server-community_${VERSION}-${BLD_NUM}-macos_x86_64-unnotarized.dmg)
+DMGS=(couchbase-server-enterprise_${VERSION}-${BLD_NUM}-macos_x86_64-unnotarized.dmg)
 declare -a UNNOTARIZED
 
 # Check if DMGS are notarized
