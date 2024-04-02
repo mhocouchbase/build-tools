@@ -4,6 +4,7 @@ import sys
 import json
 import timestring
 from blackduck.HubRestApi import HubInstance
+from blackduck import Client
 from collections import defaultdict
 from pathlib import Path
 
@@ -16,63 +17,37 @@ class Blackduck:
         else:
             sys.exit('Unable to locate blackduck-creds.json')
 
-        self.hub = HubInstance(
-            bd_creds['url'],
-            bd_creds['username'],
-            bd_creds['password'],
-            insecure=True)
+        self.hub_client = Client(
+            token=bd_creds['token'],
+            base_url=bd_creds['url']
+        )
 
-    def get_notifications(self, filter_url):
-        current_user = self.hub.get_current_user()
-        notifications_url = self.hub.get_link(current_user, "notifications")
+    def get_vulnerability_notifications(self, project, version, startdate):
+        params = {
+           "filter": "notificationType:vulnerability"
+        }
+        if startdate:
+            params['startDate'] = startdate
+        notifications = self.hub_client.get_resource("notifications", params=params)
 
-        url = f"{notifications_url}?{filter_url}"
-        response = self.hub.execute_get(url)
+        if project:
+            notifications = list(
+                filter(lambda n: project in [apv['projectName'] for apv in n['content']['affectedProjectVersions']],
+                       notifications))
+        if version:
+            notifications = list(
+                filter(lambda n: version in [apv['projectVersionName'] for apv in n['content']['affectedProjectVersions']],
+                       notifications))
+        return notifications
 
-        if response.status_code == 200:
-            limit = response.json().get('totalCount', [])
-            response = self.hub.execute_get(
-                f"{notifications_url}?limit={limit}")
-            if response.status_code == 200:
-                notifications = response.json().get('items', [])
-                return notifications
-            else:
-                sys.exit('Failed to retrieve notifications')
-        else:
-            sys.exit('Failed to retrieve notifications.')
 
-    def get_vulnerability_notifications(
-            self, project_name, version_name, newer_than, older_than):
-        notifications = self.get_notifications(
-            "filter=notificationType%3Avulnerability")
-
-        # further reduce noises from project creations, unknown components,
-        # etc.
-        vulnerability_notifications = [
-            v for v in notifications if v['type'] == "VULNERABILITY"]
-
-        if newer_than:
-            vulnerability_notifications = list(
-                filter(lambda n: timestring.Date(n['createdAt']) > newer_than, vulnerability_notifications))
-        if older_than:
-            vulnerability_notifications = list(
-                filter(lambda n: timestring.Date(n['createdAt']) < older_than, vulnerability_notifications))
-        if project_name:
-            vulnerability_notifications = list(
-                filter(lambda n: project_name in [apv['projectName'] for apv in n['content']['affectedProjectVersions']],
-                       vulnerability_notifications))
-            if version_name:
-                vulnerability_notifications = list(
-                    filter(lambda n: version_name in [apv['projectVersionName'] for apv in n['content']['affectedProjectVersions']],
-                           vulnerability_notifications))
-        return vulnerability_notifications
 
     # Create cve dictionaries
 
     def create_cve_dicts(self, cves):
         dicts = {}
         for cve in cves:
-            dicts[cve] = self.hub.get_vulnerabilities(cve)
+            dicts[cve] = self.hub_client.get_json(f'/api/vulnerabilities/{cve}')
         return dicts
 
     # Create a mapping between component version and files
@@ -84,7 +59,7 @@ class Blackduck:
     def get_project_version_files(self, project_version_url):
         project_version_files = defaultdict(list)
         url = project_version_url + '/matched-files?limit=3000'
-        response = self.hub.execute_get(url)
+        response = self.hub_client.get_json(url)
         local_file_prefix = 'file:///home/couchbase/workspace/blackduck-detect-scan/src/'
         if response.status_code == 200:
             for item in response.json().get('items'):
@@ -108,7 +83,7 @@ class Blackduck:
     def get_vulnerability_bom(self, project_version_url):
         url = project_version_url + \
             '/vulnerability-bom?filter=remediationType%3Anew&filter=remediationType%3Aneeds_review&filter=remediationType%3Aremediation_required'
-        response = self.hub.execute_get(url)
+        response = self.hub_client.get_json(url)
         if response.status_code == 200:
             return json.loads(response.text)['items']
         else:
@@ -116,7 +91,7 @@ class Blackduck:
 
     # return project dict
     def get_project_by_name(self, project_name):
-        return self.hub.get_project_by_name(project_name)
+        return self.hub_client.get_project_by_name(project_name)
 
     # return a list version dicts
     def get_project_version_url(self, project, version_name):

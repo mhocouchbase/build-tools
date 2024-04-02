@@ -256,6 +256,7 @@ def update_jira_issue(jira, notification, issue):
                 ticket_cves[n['name']]['link'] = n['link']
 
     if ticket_needs_update:
+        logging.info('Updating issue fields.')
         ticket_fields = construct_ticket_fields(
             notification, ticket_cves_list, ticket_cves, detail_sum, detail_files)
 
@@ -270,11 +271,14 @@ def update_jira_issue(jira, notification, issue):
 
         # Reopen the ticket since CVEs have changed.
         if issue.fields.status.name in [
-                'Done', 'Mitigated', 'Not Applicable']:
+                'Mitigated', 'Not Applicable']:
             jira.transition_issue(
                 issue,
                 config.JIRA['to_do'],
                 notification['date'])  # transition to TO DO
+
+        if issue.fields.status.name == 'Done':
+            logging.info(f'Issue is in {issue.fields.status.name} state.  No need to reopen.')
 
 # Main
 parser = argparse.ArgumentParser('Retreive vulnerability notifications')
@@ -287,31 +291,12 @@ parser.add_argument(
 parser.add_argument('-n', '--newer_than',
                     default=None,
                     type=str,
-                    help='Filter notifications by date/time.')
-parser.add_argument('-o', '--older_than',
-                    default=None,
-                    type=str,
-                    help='Filter notifications by date/time.')
+                    help='Filter notifications by date.  The date string must be yyyy-MM-dd"T"HH:mm:ss.SSSZ')
 args = parser.parse_args()
-
-if args.newer_than:
-    newer_than = timestring.Date(args.newer_than).date
-else:
-    newer_than = None
-
-if args.older_than:
-    older_than = timestring.Date(args.older_than).date
-else:
-    older_than = None
-
-if args.version_name:
-    version_name = args.version_name
-else:
-    version_name = None
 
 blackduck = Blackduck()
 notifications = blackduck.get_vulnerability_notifications(
-    args.project_name, version_name, newer_than, older_than)
+    args.project_name, args.version_name, args.newer_than)
 scan_notifications = []
 update_notifications = []
 all_cves_list = []
