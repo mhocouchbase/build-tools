@@ -26,7 +26,8 @@ cocoa_push() {
 
 # Create PR to update couchbase-lite-ios CE podspecs
 create_pr() {
-    local repo="${1}"
+    local repo_org="${1}"
+    local repo="${2}"
     pushd ${SCRIPT_DIR}/${repo}
     git checkout ${BRANCH}
     git branch podspecs_update
@@ -44,7 +45,7 @@ create_pr() {
         git commit -a -m "Update pod specs for ${PRODUCT} ${VERSION}"
 
         if [[ "${DRYRUN}" == 'false' ]]; then
-            gh pr create --repo "${repo}" --base "${BRANCH}" -f
+            gh pr create --repo "${repo_org}/${repo}" --base "${BRANCH}" --head "podspecs_update" -f
         fi
     fi
     popd
@@ -88,7 +89,7 @@ couchbase_lite_ios_publish() {
     git checkout ${BRANCH}
     if [[ "${COMMUNITY}" != "no" ]]; then
         files=$(ls *.podspec)
-        create_pr "couchbase-lite-ios"
+        #create_pr "couchbase" "couchbase-lite-ios"
     else
         files=$(ls *.podspec |grep Enterprise)
     fi
@@ -115,10 +116,9 @@ couchbase_lite_vector_search_publish() {
 # Predefined params from Jenkins job:
 # ${PRODUCT}, ${VERSION}, ${DRYRUN}, ${BRANCH}, ${COMMUNITY}, ${RUBY_VERSION}
 
+set_ruby_env
 # Ensure there is a valid pod session before continue
 verify_pod_session
-
-set_ruby_env
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd ${SCRIPT_DIR}
