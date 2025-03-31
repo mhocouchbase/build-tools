@@ -174,7 +174,7 @@ if [[ "${DRYRUN}" = "yes" && multiarch ]]; then
         echo @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         echo Building ${ARCHIMAGES[@]}
         echo @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        docker buildx build --pull --platform linux/${arch} --load \
+        docker buildx build --output type=docker --pull --platform linux/${arch} --load \
             ${BUILD_ARGS} -f ${DOCKERFILE} ${ARCHIMAGES[@]/#/-t } .
     done
 else
@@ -186,6 +186,6 @@ else
     echo @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     echo Building and Pushing ${IMAGES[@]}
     echo @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    docker buildx build --pull --platform ${PLATFORMS} --push \
+    docker buildx build --output type=docker --pull --platform ${PLATFORMS} --push \
         ${BUILD_ARGS} -f ${DOCKERFILE} ${IMAGES[@]/#/-t } .
 fi
