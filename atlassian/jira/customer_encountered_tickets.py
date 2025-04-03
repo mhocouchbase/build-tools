@@ -59,35 +59,12 @@ def find_tickets_with_linked_cbse(jira_session, project_key, affected_version):
     return [issue['key'] for issue in issues if has_cbse_link(issue)]
 
 
-def external_impact_tickets_without_cbse(jira_session, project_key):
-    '''
-        Find tickets of given project that:
-            - types of Bug, Task, and Improvement
-            - do not have a linked issue associated with CBSE project
-            - have issue impact wrongly set to external
-        Return a list of issue keys
-    '''
-    search_str = (
-        f'project={project_key} AND '
-        f'issuetype in (Bug, Task, Improvement) AND '
-        f'cf[{ISSUE_IMPACT_FIELD_ID}] in ("external")'
-    )
-    if extra_jql := JIRA_PROJECTS[project_key].get("EXTRA_JQL_PATTERN"):
-        search_str += f' AND {extra_jql}'
-
-    issues = jira_session.search_jira_issues(search_str)
-    return [issue['key'] for issue in issues if not has_cbse_link(issue)]
-
-
 if __name__ == '__main__':
     issue_impact_field = f'customfield_{ISSUE_IMPACT_FIELD_ID}'
     set_issue_impact_field_external = {
         issue_impact_field: {
             "value": "external"
         }
-    }
-    unset_issue_impact_field = {
-        issue_impact_field: None
     }
     session = JiraIssueManager()
     for project in JIRA_PROJECTS:
@@ -101,12 +78,3 @@ if __name__ == '__main__':
                 f'set issue_impact field to external for {project} {version}: {issues_to_set}')
             for issue in issues_to_set:
                 session.update_issue(issue, set_issue_impact_field_external)
-
-        issues_to_unset = external_impact_tickets_without_cbse(
-            session,
-            project
-        )
-        logger.info(
-            f'unset issue_impact field for {project}: {issues_to_unset}')
-        for issue_key in issues_to_unset:
-            session.update_issue(issue_key, unset_issue_impact_field)
