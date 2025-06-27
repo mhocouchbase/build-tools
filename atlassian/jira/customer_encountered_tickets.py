@@ -8,7 +8,7 @@ from jira_issue_manager import JiraIssueManager
 
 logger = logging.getLogger(__name__)
 
-UPDATED_DATE_LIMIT = '-78w' # 1.5 years
+CREATED_DATE_LIMIT = '2020-01-01'
 STANDALONE_JIRA_PROJECTS = {
     'MB': {
         'ISSUE_TYPES': ('Bug', 'Task', 'Improvement'),
@@ -75,11 +75,12 @@ def find_tickets_with_linked_cbse(jira_session, project_key, category=None):
         f'cf[{ISSUE_IMPACT_FIELD_ID}] is EMPTY AND '
         f'issueLinkType is not EMPTY AND '
         f'issuetype in ({", ".join(issue_types)}) AND '
-        f'updated >= "{UPDATED_DATE_LIMIT}"'
+        f'created >= "{CREATED_DATE_LIMIT}"'
     )
     if extra_jql := config.get("EXTRA_JQL_PATTERN"):
         search_str += f' AND {extra_jql}'
 
+    print(f'search string: {search_str}')
     issues = jira_session.search_jira_issues(search_str)
     return [issue['key'] for issue in issues if has_cbse_link(issue)]
 
@@ -99,6 +100,7 @@ if __name__ == '__main__':
             session,
             project,
         )
+        print(len(issues_to_set))
         logger.info(
             f'set issue_impact field to external for {project}: {issues_to_set}')
         for issue in issues_to_set:
@@ -113,6 +115,7 @@ if __name__ == '__main__':
                 project,
                 category
             )
+            print(len(issues_to_set))
             logger.info(
                 f'set issue_impact field to external for {project}: {issues_to_set}')
             for issue in issues_to_set:
