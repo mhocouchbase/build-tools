@@ -1,0 +1,9 @@
+{
+    "versions": {
+        "dev": {
+            "__comment": "NOTE: this version points to the future release",
+            "release": "step-functions-master",
+            "interval": 1440
+        }
+    }
+}
