@@ -1,5 +1,5 @@
 #!/bin/bash -ex
-
+set -x
 # example usage
 # get_source.sh vulcan 1.0.0 1.0.0 9999
 
@@ -25,7 +25,8 @@ if [[ "$RELEASE" == "release" ]]; then
 else
   git checkout $RELEASE
 fi
-rm -rf deprecated,docs,sandbox,tests
+pwd
+rm -rf deprecated docs sandbox tests
 
 # Extract POETRY_VERSION and PYTHON_VERSION with defaults
 PYTHON_VERSION=$(grep "^PYTHON_VERSION :=" Makefile | cut -d' ' -f3)
