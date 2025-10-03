@@ -23,7 +23,7 @@ EXCLUDED_PROJECTS = [
 INCLUDED_VERSION_NAMES = {'snapshot', 'dev', 'main', 'master', 'production'}
 
 # Jira constants
-JIRA_PROJECT_KEY = 'VULN'
+JIRA_PROJECT_KEY = 'VT'
 JIRA_ISSUE_TYPE = 'Bug'
 WORKFLOW_TO_DO_ID = '231'  # Corresponding workflow transition ID in jira
 WORKFLOW_DONE_ID = '241'  # Corresponding workflow transition ID in jira
@@ -35,6 +35,7 @@ BD_LAST_UPDATE_FIELD = 'customfield_11272'
 BD_PROJECT_FIELD = 'customfield_11330'
 BD_PROJ_VERSION_FIELD = 'customfield_11331'
 BD_SEVERITY_FIELD = 'customfield_11329'
+BD_BDSA_FIELD = 'customfield_13574'
 DONE_STATUSES = {
     'Not Applicable',
     'Component Not Applicable',
@@ -54,4 +55,7 @@ DO_NOT_REOPEN_STATUSES = {
 EXCLUDED_CVE_LIST = {
     'CVE-2019-11840',  # Blackduck falsely reports against wrong versions of golang.org/x/crypto
     'CVE-2017-3204',  # Blackduck falsely reports against wrong versions of golang.org/x/crypto
+}
+EXCLUDED_BDSA_LIST = {
+    ''
 }
