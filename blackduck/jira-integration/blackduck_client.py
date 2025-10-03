@@ -34,7 +34,7 @@ class BlackduckClient:
         self.hub_client = Client(
             token=bd_creds['token'],
             base_url=bd_creds['url'],
-            verify=True,
+            verify=False,
             timeout=30.0,
             retries=5
         )
@@ -73,6 +73,115 @@ class BlackduckClient:
                 None)
         return all_items
 
+    def _build_link(self, x):
+        '''Helper function to build vulnerability link string'''
+        if 'vuln' not in x:
+            return None
+        parts = []
+        if x['bdsa_id'] and x['bdsa_link']:
+            parts.append(f"[{x['bdsa_id']}|{x['bdsa_link']}]")
+        if x['cve_id'] and x['cve_link']:
+            parts.append(f"[{x['cve_id']}|{x['cve_link']}]")
+        return f"{x['severity']}:[ {' '.join(parts)} ]" if parts else None
+
+    def _process_vulnerability_detail(self, vuln_id):
+        '''Process vulnerability details from BlackDuck API and return structured data'''
+        cve_link = cve_id = cve_severity = ''
+        bdsa_link = bdsa_id = bdsa_severity = ''
+
+        url = f"{self.base_url}/api/vulnerabilities/{vuln_id}"
+        vuln_detail = self.hub_client.get_json(url)
+
+        # Skip entries with null severity
+        severity = vuln_detail.get('severity')
+        if severity is None:
+            logging.warning(
+                f"Vulnerability {vuln_id} has null severity. Skipping.")
+            return None
+
+        # Skip entries with unknown source
+        if vuln_detail['source'] not in ('BDSA', 'NVD'):
+            logging.warning(
+                f'Vulnerability {vuln_id} has unknown source: {vuln_detail["source"]}. Skipping.')
+            return None
+
+        if vuln_detail['source'] == 'NVD':
+            cve_link = next(
+                (x['href'] for x in vuln_detail['_meta']['links'] if x.get('rel') == 'nist'), '')
+            bdsa_link = next((x['href'] for x in vuln_detail['_meta'][
+                             'links'] if 'label' in x and x['label'] == 'BDSA'), '')
+            cve_id = vuln_id
+            cve_severity = severity
+            if bdsa_link:
+                bdsa_id = bdsa_link.split('/')[-1]
+                bdsa_detail = self.hub_client.get_json(bdsa_link)
+                bdsa_severity = bdsa_detail.get('severity')
+                severity = bdsa_severity
+
+        elif vuln_detail['source'] == 'BDSA':
+            bdsa_link = vuln_detail['_meta']['href']
+            bdsa_id = vuln_id
+            bdsa_severity = severity
+            bd_cve_link = next(
+                (x['href'] for x in vuln_detail['_meta']['links']
+                 if 'label' in x and x['label'] == 'NVD'), '')
+            if bd_cve_link:
+                cve_detail = self.hub_client.get_json(bd_cve_link)
+                cve_link = next(
+                    (x['href'] for x in cve_detail['_meta']['links']
+                     if x['rel'] == 'nist'), '')
+                cve_id = cve_link.split('/')[-1]
+                cve_severity = cve_detail.get('severity')
+
+        vuln_data = {
+            'severity': severity,
+            'cve_id': cve_id,
+            'bdsa_id': bdsa_id,
+            'cve_severity': cve_severity,
+            'bdsa_severity': bdsa_severity,
+            'cve_link': cve_link,
+            'bdsa_link': bdsa_link,
+            'vuln_detail': vuln_detail
+        }
+        return vuln_data
+
+    def _group_entries(self, entries, group_key, sort_key,
+                       base_fields, component_files=None):
+        '''Generic method to group vulnerability entries by specified criteria'''
+        grouped_entries = []
+
+        entries.sort(
+            key=sort_key,
+            reverse=True if 'updatedDate' in str(sort_key) else False)
+
+        for k, g in groupby(entries, key=group_key):
+            comp_entries = list(g)
+            comp_dict = {field: comp_entries[0][field]
+                         for field in base_fields}
+
+            comp_entries.sort(
+                key=lambda x: constants.SEVERITY_LIST.index(
+                    x['severity']))
+            comp_dict['severity'] = comp_entries[0]['severity']
+
+            comp_dict['bdsa_list'] = ','.join(
+                sorted(set(x['bdsa_id']
+                           for x in comp_entries
+                           if x['bdsa_id'])))
+            comp_dict['cve_list'] = ','.join(
+                sorted(set(x['cve_id']
+                           for x in comp_entries
+                           if x['cve_id'])))
+            comp_dict['links'] = '\n'.join(dict.fromkeys(
+                filter(None, (self._build_link(x) for x in comp_entries))))
+
+            if component_files is not None:
+                comp_dict['files'] = component_files[comp_dict['componentVersion']]
+
+            grouped_entries.append(comp_dict)
+
+        return grouped_entries
+
     def get_project_by_name(self, project_name):
         '''Query project by name'''
         project = self._get_resource_by_name('name', 'projects', project_name)
@@ -89,11 +198,13 @@ class BlackduckClient:
         is_archived = False
         phase = version.get('phase', '')
         if phase.lower() == 'archived':
-            logging.info(f'Version {version.get("versionName")} is in {phase} phase.'
-                         'No new scan will be produced.')
+            logging.info(
+                f'Version {version.get("versionName")} is in {phase} phase.'
+                'No new scan will be produced.')
             is_archived = True
         else:
-            logging.debug(f'Version {version.get("versionName")} is in {phase} phase.')
+            logging.debug(
+                f'Version {version.get("versionName")} is in {phase} phase.')
 
         return is_archived
 
@@ -104,8 +215,7 @@ class BlackduckClient:
         version_url = version['_meta']['href']
         url = f"{version_url}/matched-files?limit=100"
         headers = {
-            'Accept': 'application/vnd.blackducksoftware.bill-of-materials-6+json'
-        }
+            'Accept': 'application/vnd.blackducksoftware.bill-of-materials-6+json'}
         items = self._fetch_all_links(url, headers)
 
         for item in items:
@@ -116,73 +226,41 @@ class BlackduckClient:
             component_files[component_url].append(filepath)
         return component_files
 
-    def group_vulnerability_entries(self, cve_list, component_files):
+    def group_vulnerability_entries(self, vuln_list, component_files):
         ''' Group vulnerability entries by component version.  '''
-        grouped_entries = []
-
-        cve_list.sort(
-            key=lambda x: (
-                x['componentVersion'],
-                x['updatedDate']),
-            reverse=True)
-
-        for k, g in groupby(cve_list, key=lambda x: x['componentVersion']):
-            comp_entries = list(g)
-            comp_dict = {
-                k: comp_entries[0][k] for k in (
-                    'componentVersion',
-                    'componentName',
-                    'componentVersionName',
-                    'updatedDate')}
-            comp_entries.sort(
-                key=lambda x: constants.SEVERITY_LIST.index(
-                    x['severity']))
-            comp_dict['severity'] = comp_entries[0]['severity']
-            comp_dict['cves'] = ','.join(
-                sorted(set(x['cve_name'] for x in comp_entries)))
-            comp_dict['links'] = '\n'.join(
-                set(f"{x['severity']}:[ [{x['cve_name']}|{x['nist']}] ]" for x in comp_entries))
-            comp_dict['files'] = component_files[comp_dict['componentVersion']]
-            grouped_entries.append(comp_dict)
-
-        return grouped_entries
+        return self._group_entries(
+            entries=vuln_list,
+            group_key=lambda x: x['componentVersion'],
+            sort_key=lambda x: (x['componentVersion'], x['updatedDate']),
+            base_fields=(
+                'componentVersion',
+                'componentName',
+                'componentVersionName',
+                'updatedDate'),
+            component_files=component_files
+        )
 
     def group_journal_entries(self, cve_entries):
         ''' Aggregate journal entries by component version.  '''
-        grouped_entries = []
-
-        cve_entries.sort(
-            key=lambda x: (
+        return self._group_entries(
+            entries=cve_entries,
+            group_key=lambda x: (
                 x['componentName'],
-                x['componentVersionName']))
-
-        for k, g in groupby(cve_entries, key=lambda x: (
-                x['componentName'], x['componentVersionName'])):
-            comp_entries = list(g)
-            comp_dict = {
-                k: comp_entries[0][k] for k in (
-                    'componentName',
-                    'componentVersionName',
-                    'updatedDate')}
-            comp_entries.sort(
-                key=lambda x: constants.SEVERITY_LIST.index(
-                    x['severity']))
-            comp_dict['severity'] = comp_entries[0]['severity']
-            comp_dict['cves'] = ','.join(
-                sorted(set(x['cve_name'] for x in comp_entries)))
-            comp_dict['links'] = '\n'.join(set(
-                f"{x['severity']}:[[{x['cve_name']}|{x['cve_link']}]]" for x in comp_entries))
-            grouped_entries.append(comp_dict)
-
-        return grouped_entries
+                x['componentVersionName']),
+            sort_key=lambda x: (x['componentName'], x['componentVersionName']),
+            base_fields=(
+                'componentName',
+                'componentVersionName',
+                'updatedDate'),
+            component_files=None
+        )
 
     def get_bom_vulns(self, version):
         '''Retrieve vulnerabilities associated with a specific project version from Blackduck.'''
         vulns = []
         bom_url = f"{version['_meta']['href']}/vulnerable-bom-components?limit=100"
         headers = {
-            'Accept': 'application/vnd.blackducksoftware.bill-of-materials-8+json'
-        }
+            'Accept': 'application/vnd.blackducksoftware.bill-of-materials-8+json'}
         items = self._fetch_all_links(bom_url, headers)
         vulns.extend(items)
         return vulns
@@ -192,34 +270,38 @@ class BlackduckClient:
         component_files = self.get_bom_files(version)
         entries = self.get_bom_vulns(version)
 
-        cve_list = []
+        vuln_list = []
         for entry in entries:
-            cve_name = entry['vulnerability']['vulnerabilityId']
-            # Skip if CVE is in the exclusion list
-            if cve_name in constants.EXCLUDED_CVE_LIST:
-                logging.info(f"CVE {cve_name} is on the excluded list")
-                continue
-            url = f"{self.base_url}/api/vulnerabilities/{cve_name}"
-            cve_detail = self.hub_client.get_json(url)
-            cve_link = next(
-                (x['href'] for x in cve_detail['_meta']['links'] if x['rel'] == 'nist'), '')
+            vuln_id = entry['vulnerability']['vulnerabilityId']
+            print(f'CVE: {vuln_id}')
 
-            # Skip entries with null severity
-            severity = cve_detail.get('severity')
-            if severity is None:
-                logging.warning(f"CVE {cve_name} has null severity, skipping this entry")
+            # Skip if CVE is in the exclusion list
+            if vuln_id in (constants.EXCLUDED_CVE_LIST,
+                           constants.EXCLUDED_BDSA_LIST):
+                logging.info(
+                    f"Vulnerability {vuln_id} is on the excluded list. Skipping.")
                 continue
-            cve_list.append({
+
+            # Process vulnerability details using helper method
+            vuln_data = self._process_vulnerability_detail(vuln_id)
+            if vuln_data is None or not vuln_data:
+                continue
+
+            vuln_list.append({
                 'componentVersion': entry['componentVersion'],
                 'componentName': entry['componentName'],
                 'componentVersionName': entry['componentVersionName'],
-                'cve_name': cve_name,
-                'severity': severity,
-                'updatedDate': cve_detail['updatedDate'],
-                'nist': cve_link
+                'severity': vuln_data['severity'],
+                'cve_id': vuln_data['cve_id'],
+                'bdsa_id': vuln_data['bdsa_id'],
+                'cve_severity': vuln_data['cve_severity'],
+                'bdsa_severity': vuln_data['bdsa_severity'],
+                'cve_link': vuln_data['cve_link'],
+                'bdsa_link': vuln_data['bdsa_link'],
+                'updatedDate': vuln_data['vuln_detail']['updatedDate']
             })
 
-        return self.group_vulnerability_entries(cve_list, component_files)
+        return self.group_vulnerability_entries(vuln_list, component_files)
 
     def get_bom_status(self, version):
         '''Retrieve the BOM status for a project version.'''
@@ -243,7 +325,7 @@ class BlackduckClient:
         date_string = start_date.isoformat()
         encoded_date_string = urllib.parse.quote(date_string)
 
-        cve_entries, removed_entries = [], []
+        vuln_entries, removed_entries = [], []
         url_base = version['_meta']['href'].replace(
             'api', 'api/journal')
         url = (
@@ -266,18 +348,29 @@ class BlackduckClient:
         journal_entries = activities.get('items', [])
         for entry in journal_entries:
             if entry['action'] == 'Vulnerability Found':
-                cve_name=entry['currentData']['vulnerabilityId']
+                vuln_id = entry['currentData']['vulnerabilityId']
                 # Skip if CVE is in the exclusion list
-                if cve_name in constants.EXCLUDED_CVE_LIST:
-                    logging.info(f"CVE {cve_name} is on the excluded list")
+                if vuln_id in (constants.EXCLUDED_CVE_LIST,
+                               constants.EXCLUDED_BDSA_LIST):
+                    logging.info(
+                        f"Vulnerability {vuln_id} is on the excluded list")
                     continue
-                cve_link=f"https://nvd.nist.gov/vuln/detail/{entry['currentData']['vulnerabilityId']}"
-                cve_entries.append({
+
+                # Process vulnerability details using helper method
+                vuln_data = self._process_vulnerability_detail(vuln_id)
+                if vuln_data is None or not vuln_data:
+                    continue
+
+                vuln_entries.append({
                     'componentName': entry['currentData']['projectName'],
                     'componentVersionName': entry['currentData']['releaseVersion'],
-                    'cve_name': cve_name,
-                    'cve_link': cve_link,
-                    'severity': entry['currentData']['riskPriority'].upper(),
+                    'severity': vuln_data['severity'],
+                    'cve_id': vuln_data['cve_id'],
+                    'bdsa_id': vuln_data['bdsa_id'],
+                    'cve_severity': vuln_data['cve_severity'],
+                    'bdsa_severity': vuln_data['bdsa_severity'],
+                    'cve_link': vuln_data['cve_link'],
+                    'bdsa_link': vuln_data['bdsa_link'],
                     'updatedDate': entry['timestamp']
                 })
             elif entry['action'] == 'Component Deleted':
@@ -287,6 +380,6 @@ class BlackduckClient:
                     'updatedDate': entry['timestamp']
                 })
 
-        grouped_update_entries = self.group_journal_entries(cve_entries)
+        grouped_update_entries = self.group_journal_entries(vuln_entries)
 
         return grouped_update_entries, removed_entries

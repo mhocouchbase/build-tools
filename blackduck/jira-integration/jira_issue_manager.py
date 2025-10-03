@@ -52,7 +52,8 @@ class JiraIssueManager:
             constants.BD_PROJECT_FIELD: project,
             constants.BD_PROJ_VERSION_FIELD: version,
             constants.BD_SEVERITY_FIELD: field_info['severity'],
-            constants.BD_CVES_FIELD: field_info['cves'],
+            constants.BD_CVES_FIELD: field_info['cve_list'],
+            constants.BD_BDSA_FIELD: field_info['bdsa_list'],
             constants.BD_LAST_UPDATE_FIELD: field_info['updatedDate']
         }
 
@@ -110,7 +111,7 @@ class JiraIssueManager:
             project_name,
             project_version):
         '''Find all issues for a specific project and version.'''
-        nextPageToken = None
+        next_page_token = None
         issues = []
         # Double quotes in JQL are used to deal with spaces and special characters
         search_str = (
@@ -120,9 +121,9 @@ class JiraIssueManager:
         )
         while True:
             response = self.client.enhanced_search_issues(
-                search_str, json_result=True, nextPageToken=nextPageToken)
+                search_str, json_result=True, nextPageToken=next_page_token)
             issues.extend(response.get('issues', []))
-            nextPageToken = response.get('nextPageToken')
+            next_page_token = response.get('nextPageToken')
             if response.get('isLast'):
                 break
         return issues
