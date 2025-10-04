@@ -94,6 +94,7 @@ properties = {
     "blackduck.api.token": creds["token"],
     "blackduck.url": creds["url"],
     "blackduck.trust.cert": "true",
+    "blackduck.signature.scanner.trust.cert": "true",
     "detect.project.name": "${PRODUCT}",
     "detect.project.version.name": "${VERSION}",
     "detect.blackduck.signature.scanner.memory": 10240,

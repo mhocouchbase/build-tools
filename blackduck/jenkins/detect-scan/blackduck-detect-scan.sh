@@ -164,12 +164,13 @@ if [ "x${DRY_RUN}" = "xtrue" ]; then
 fi
 
 # Invoke scan script
+export DETECT_SSL_VERIFY=false
 uv run --project "${DETECT_SCRIPT_DIR}" --quiet \
   python -u "${DETECT_SCRIPT_DIR}/run-scanner" \
     ${DRY_RUN_ARG} \
     ${CONFIG_ARG} \
     --python-venv ${venv} \
-    --credentials ~/.ssh/blackduck-creds.json \
+    --credentials /tmp/ming-blackduck-creds.json \
     --pdf
 
 # Copy up dry-run archives
@@ -184,7 +185,7 @@ fi
 echo "Loading product-specific Black Duck manifests"
 uv run --project "${DETECT_SCRIPT_DIR}" --quiet \
   "${DETECT_SCRIPT_DIR}/update-manual-manifest.py" -d \
-    --credentials ~/.ssh/blackduck-creds.json \
+    --credentials /tmp/ming-blackduck-creds.json \
     --operation update --src-root "${WORKSPACE}" \
     -p ${PRODUCT} -v ${VERSION}
 

@@ -24,7 +24,7 @@ parser.add_argument('sub_project_json')
 args = parser.parse_args()
 
 
-creds_file = str(Path.home()) + '/.ssh/blackduck-creds.json'
+creds_file = str(Path.home()) + '/tmp/ming-blackduck-creds.json'
 if Path(creds_file).exists():
     bd_creds =json.loads(open(creds_file).read())
 else:
@@ -35,7 +35,7 @@ if Path(args.sub_project_json).exists():
     logger.info('Loading ' + args.sub_project_json)
 else:
     sys.exit('Unable to locate ' + args.sub_project_json)
-client = Client(base_url=bd_creds["url"], token=bd_creds["token"])
+client = Client(base_url=bd_creds["url"], token=bd_creds["token"], verify=False)
 
 parent_project_version = None
 try:
