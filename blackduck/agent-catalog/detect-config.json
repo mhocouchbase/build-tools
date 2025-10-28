@@ -2,7 +2,9 @@
     "detect_opts": {
         "detect.detector.search.depth": 9,
         "logging.level.detect": "DEBUG",
-        "detect.excluded.detector.types": "POETRY",
-        "detect.tools.excluded": "SIGNATURE_SCAN"
+        "detect.tools.excluded": "SIGNATURE_SCAN",
+        "detect.pip.poetry.path": "pyproject.toml",
+        "detect.pip.requirements.exclude": "requirements.txt",
+        "detect.poetry.dependency.groups.excluded": "dev,test,docs,build-system"
     }
 }
