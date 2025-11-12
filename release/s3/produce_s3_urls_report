@@ -238,6 +238,12 @@ def get_product_download_urls(product, version):
           f"https://docs.couchbase.com/couchbase-lite/current/swift/gs-install.html"
         ]
       }
+    case "couchbase-lite-js":
+      return {
+        "Couchbase Lite Javascript": [
+          f"https://docs.couchbase.com/couchbase-lite-javascript/current/gs-install.html"
+        ]
+      }
     case _:
       return {}
 
