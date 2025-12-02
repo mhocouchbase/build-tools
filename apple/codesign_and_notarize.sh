@@ -111,6 +111,7 @@ couchbase-server)
         build_community=false
     fi
 
+    build_community=false
     if ${build_community}; then
         expected+=(${PRODUCT}-community_${VERSION}-${BLD_NUM}-macos_x86_64.dmg)
         expected+=(${PRODUCT}-community_${VERSION}-${BLD_NUM}-macos_arm64.dmg)
@@ -171,21 +172,6 @@ for pkg in $needed; do
         if curl --head --silent --fail $candidate_url &> /dev/null;
         then
             urls[${pkg}]=${candidate_url}
-            # For Server Enterprise, add tools package(s) to the list
-            # After 7.6.3, tools package is split into admin-tools and dev-tools.
-            # If tools zip doesn't exist, we assume 7.6.4; add admin-tools|dev-tools instead.
-            if [[ ${pkg} = "couchbase-server-enterprise"* ]]; then
-                tools_pkg=${${pkg:r}//enterprise/tools}.zip
-                if curl --head --silent --fail ${BLD_DIR}/${tools_pkg} &> /dev/null;
-                then
-                    urls[${tools_pkg}]=${BLD_DIR}/${tools_pkg}
-                else
-                    admin_tools_pkg=${${pkg:r}//enterprise_/admin-tools-}.zip
-                    dev_tools_pkg=${${pkg:r}//enterprise_/dev-tools-}.zip
-                    urls[${admin_tools_pkg}]=${BLD_DIR}/${admin_tools_pkg}
-                    urls[${dev_tools_pkg}]=${BLD_DIR}/${dev_tools_pkg}
-                fi
-            fi
             break
         fi
     done
@@ -222,12 +208,12 @@ for pkg in ${(k)urls}; do
 done
 
 # Now notarize the whole bunch.
-if ${do_notarize}; then
-    header "Notarizing all files..."
-    "${SCRIPT_DIR}/notarization/notarize_simple.sh" *
-else
-    header "Skipping notarization for product ${PRODUCT}..."
-fi
+#if ${do_notarize}; then
+    #header "Notarizing all files..."
+    #"${SCRIPT_DIR}/notarization/notarize_simple.sh" *
+#else
+    #header "Skipping notarization for product ${PRODUCT}..."
+#fi
 
 echo
 echo

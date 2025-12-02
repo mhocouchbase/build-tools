@@ -93,13 +93,17 @@ do
   ##It seems only jars in  META-INF are impacted so far.
   ##jars with .jnilib in other locations were not rejected
   if [[ "$f" = *".jar" ]]; then
+    echo "checking $f ..."
     libs=`jar -tf "$f" | grep ".jnilib\|.dylib"`
     if [[ ! -z $libs ]]; then
       for l in ${libs}; do
         dir=$(echo ${l} |awk -F '/' '{print $1}')
+        echo "checking library: $l ..."
+        echo "library dir: $dir ..."
         jar xf "$f" "$l"
         codesign $sign_flags --sign "$cert_name" "$l"
         jar uf "$f" "$l"
+        ls -arlt ${dir}
         rm -rf ${dir}
       done
     fi
