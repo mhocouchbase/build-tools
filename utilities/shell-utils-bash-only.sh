@@ -23,8 +23,14 @@ function stop_xtrace() {
 # Restore bash's 'xtrace', if it was enabled before the most recent
 # call to stop_xtrace().
 function restore_xtrace() {
-    peek="${xtrace_stack[-1]}"
-    unset 'xtrace_stack[-1]'
+    local len=${#xtrace_stack[@]}
+    if [ "${len}" -eq 0 ]; then
+        return
+    fi
+
+    local i=$((len - 1))
+    local peek=${xtrace_stack[$i]}
+    unset "xtrace_stack[$i]"
     if [ "${peek}" = "enabled" ]; then
         set -x
     else
