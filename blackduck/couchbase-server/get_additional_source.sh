@@ -104,6 +104,9 @@ GOVER_FILE="tlm/couchbase-server-${VERSION}-0000-go-versions.yaml"
 if [ -e "${GOVER_FILE}" ]; then
   # Since we didn't specify PRODUCT_VERSION to CMake above, it will be
   # just ${VERSION}-0000.
+  echo "here"
+  cat "${GOVER_FILE}"
+  exit
   uv run --project "${SCRIPT_DIR}/../scripts" --quiet \
     "${SCRIPT_DIR}/../scripts/build-go-manifest.py" \
       --go-versions "${GOVER_FILE}" \
