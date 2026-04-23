@@ -2,6 +2,7 @@
     "detect_opts": {
         "detect.excluded.detector.types": "NPM,MAVEN,GRADLE",
         "logging.level.detect": "DEBUG",
-        "detect.detector.search.depth": 10
+        "detect.detector.search.depth": 10,
+        "detect.tools.excluded": "SIGNATURE_SCAN"
     }
 }

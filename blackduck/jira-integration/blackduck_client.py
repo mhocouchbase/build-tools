@@ -273,7 +273,7 @@ class BlackduckClient:
         vuln_list = []
         for entry in entries:
             vuln_id = entry['vulnerability']['vulnerabilityId']
-            logging.info(f'CVE: {vuln_id}')
+            logging.debug(f'Getting CVE, {vuln_id}, info.')
 
             # Skip if CVE is in the exclusion list
             if vuln_id in constants.EXCLUDED_CVE_LIST or vuln_id in constants.EXCLUDED_BDSA_LIST:
@@ -284,6 +284,7 @@ class BlackduckClient:
             # Process vulnerability details using helper method
             vuln_data = self._process_vulnerability_detail(vuln_id)
             if vuln_data is None or not vuln_data:
+                logging.debug(f'Unable to obtain vulnerbility information for {vuln_id}.')
                 continue
 
             vuln_list.append({
@@ -357,6 +358,7 @@ class BlackduckClient:
                 # Process vulnerability details using helper method
                 vuln_data = self._process_vulnerability_detail(vuln_id)
                 if vuln_data is None or not vuln_data:
+                    logging.debug(f'Unable to obtain vulnerbility information for {vuln_id}.')
                     continue
 
                 vuln_entries.append({
