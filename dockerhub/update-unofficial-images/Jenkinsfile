@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        label 'zzz-lightweight'
+        label 'buildx'
     }
 
     parameters {
@@ -42,6 +42,14 @@ pipeline {
                     catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                         sh cmd
                     }
+                }
+            }
+        }
+        // clean up docker images and containers that were used to determine product rebuild status
+        stage('Docker prune') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh 'docker system prune -a --volumes -f'
                 }
             }
         }
@@ -87,7 +95,7 @@ ${paramsFormatted}
                             def buildParams = paramMap.collect { key, value ->
                                 string(name: key, value: value)
                             }
-                            build job: targetJob, parameters: buildParams, wait: false
+                            build job: targetJob, parameters: buildParams, wait: false, propagate: false
                         }
                     }
                 }
@@ -103,12 +111,6 @@ ${paramsFormatted}
                 to: 'build-team@couchbase.com',
                 mimeType: 'text/html'
             )
-        }
-        always {
-            sh '''
-                echo "Pruning images"
-                docker system prune -af
-            '''
         }
     }
 }
