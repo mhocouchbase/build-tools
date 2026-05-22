@@ -18,7 +18,10 @@ case ${PRODUCT} in
 esac
 
 for fl in ${!CARTHAGE_PKGS[@]}; do
-    curl --fail -LO http://packages.couchbase.com/releases/${PRODUCT}/carthage/${fl} || exit 1
+    curl --fail -L \
+        -H 'Cache-Control: no-cache, no-store' \
+        -o "${fl}" \
+        "http://packages.couchbase.com/releases/${PRODUCT}/carthage/${fl}" || exit 1
     python3 ${WORKSPACE}/build-tools/release/carthage/carthage_json.py --product ${PRODUCT} \
         --version ${VERSION} \
         --file ${fl} \

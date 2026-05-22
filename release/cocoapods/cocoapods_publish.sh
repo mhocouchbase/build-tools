@@ -16,8 +16,16 @@ cocoa_push() {
 
     # Push to trunk if not in dry-run mode
     if [[ "${DRYRUN}" == 'false' ]]; then
-        echo "Publish ${podspec}"
-        pod trunk push "${podspec}"
+        # Extract pod name from podspec filename (remove .podspec extension)
+        local pod_name="${podspec%.podspec}"
+
+        # Check if version is already published on trunk
+        if pod trunk info "${pod_name}" 2>/dev/null | grep -q "${VERSION}"; then
+            echo "Skipping publish: ${pod_name} version ${VERSION} already published"
+        else
+            echo "Publish ${podspec}"
+            pod trunk push "${podspec}"
+        fi
     else
         echo "DRYRUN mode: ${podspec}"
         cat "${podspec}"
