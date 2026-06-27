@@ -35,14 +35,20 @@ mvn -B versions:set \
 #Call maven target to generate artifacts
 #DIGICERT_PASSWORD is an environment variable injected into jenkins job.
 
+#mvn -B install -DskipTests \
+    #-Dpython.path=${PY_EXE} \
+    #-DproductVersion=${VERSION}-${BLD_NUM} \
+    #-Djarsigner.arguments=-tsa,http://timestamp.digicert.com \
+    #-Dtaco.sign \
+    #-Djarsigner.alias=digicert \
+    #-Djarsigner.keystore=~/.digicert.jks \
+    #-Djarsigner.storepass=${DIGICERT_PASSWORD} \
+    #-f cbtaco/pom.xml
+
 mvn -B install -DskipTests \
     -Dpython.path=${PY_EXE} \
     -DproductVersion=${VERSION}-${BLD_NUM} \
-    -Djarsigner.arguments=-tsa,http://timestamp.digicert.com \
-    -Dtaco.sign \
-    -Djarsigner.alias=digicert \
-    -Djarsigner.keystore=~/.digicert.jks \
-    -Djarsigner.storepass=${DIGICERT_PASSWORD} \
+    -Dtaco.sign=false \
     -f cbtaco/pom.xml
 
 # Verify that the cert is still valid
