@@ -19,10 +19,26 @@ def parse_src_input(input):
         path = result.get('path', project)
         revision = result.get('revision', 'master')
 
-        input_lock_src[path] = {
+        entry = {
             'name': project,
             'revision': revision
         }
+        input_lock_src[path] = entry
+        # Also store by name so extend-project lookups work
+        if project != path:
+            input_lock_src[project] = entry
+
+    # Also parse extend-project elements from the source
+    # These are stored by name, same as projects, since extend-project
+    # and project are treated equivalently for SHA lookup purposes
+    for result in tree.iterfind(".//extend-project"):
+        name = result.get('name')
+        revision = result.get('revision')
+        if name and revision:
+            input_lock_src[name] = {
+                'name': name,
+                'revision': revision
+            }
 
     return input_lock_src
 
@@ -99,17 +115,61 @@ def lock_to_sha(args):
             logging.fatal(f"Error: {e} {project} not found in \"{args.sha_src}\" input file!")
             sys.exit(1)
 
+    # Process extend-project elements
+    updated_extend_projects = 0
+    for result in tree.iterfind("extend-project"):
+        name = result.get('name')
+        revision = result.get('revision')
+        if revision is None:
+            continue
+        # If already locked to a SHA, skip it
+        if sha_regex.match(revision):
+            logging.debug(f"Extend-project {name} already locked to SHA")
+            continue
+        # If already pointing to a tag, skip it
+        if revision.startswith("refs/tags/"):
+            logging.debug(f"Extend-project {name} locked to tag")
+            continue
+        # If pointing to a version branch, skip it (unless told not to)
+        if revision == product_version and not args.lock_version_branches:
+            logging.debug(
+                f"Extend-project {name} already set "
+                f"to version branch '{product_version}'")
+            projects_on_version_branch += 1
+            continue
+        # If master-only is specified and not on master/main, skip it
+        if master_only and revision != "master" and revision != "main":
+            logging.debug(f"Extend-project {name} on non-master branch {revision}")
+            continue
+        # If project was explicitly skipped, skip it
+        if name in args.skip_projects:
+            logging.debug(f"Extend-project {name} skipped due to user request")
+            continue
+        # If specific projects were specified and this isn't one of them, skip it
+        if args.projects is not None and name not in args.projects:
+            logging.debug(f"Extend-project {name} not on list of explicit projects")
+            continue
+        # Look up SHA from source by name
+        if name in sha_src_dict:
+            sha = sha_src_dict[name]['revision']
+        else:
+            logging.fatal(f"Error: extend-project {name} not found in \"{args.sha_src}\" input file!")
+            sys.exit(1)
+        result.attrib['revision'] = sha
+        updated_extend_projects += 1
+        logging.info(f"Locking extend-project {name} to {sha}")
+
     # write data
     tree.write(args.output, encoding='UTF-8',
                xml_declaration=True, pretty_print=True)
-    logging.info(f"{updated_projects} projects locked")
+    logging.info(f"{updated_projects + updated_extend_projects} projects locked")
     if projects_on_version_branch > 0:
         logging.info(
             f"{projects_on_version_branch} projects left on {product_version} "
             f"git branch (--lock-version-branches to override)"
         )
     logging.info(f"Output manifest has been generated here: {args.output}")
-    if updated_projects == 0:
+    if updated_projects + updated_extend_projects == 0:
         logging.warning("manifest unchanged!")
 
 
@@ -142,6 +202,7 @@ def main():
     parser.add_argument(
         '--skip-projects',
         nargs='+',
+        action='extend',
         metavar='project',
         help='List of projects to skip',
         default=['testrunner', 'product-texts', 'golang']
