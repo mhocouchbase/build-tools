@@ -82,4 +82,17 @@ if [ "${#zips[@]}" -ne 1 ]; then
     echo "(this job must build a single SDK flavor; check the manifest SDK annotation)"
     exit 6
 fi
+# Sign the jar files inside the zip using DigiCert Software Trust Manager.
+export SM_HOST=https://clientauth.one.digicert.com
+export SM_CLIENT_CERT_FILE=${SM_CLIENT_CERT_FILE:-~/.signingmanager/Certificate_pkcs12.p12}
+export SM_KEYPAIR_ALIAS=${SM_KEYPAIR_ALIAS:-key_1516743357}
+
+SIGN_DIR=$(mktemp -d)
+pushd "${SIGN_DIR}"
+unzip "${OLDPWD}/${zips[0]}"
+smctl sign --simple --keypair-alias "${SM_KEYPAIR_ALIAS}" --input *.jar
+zip -u "${OLDPWD}/${zips[0]}" *.jar
+popd
+rm -rf "${SIGN_DIR}"
+
 cp -p "${zips[0]}" dist/
