@@ -20,6 +20,12 @@ cbdep install mvn ${MAVEN_VERSION} -d .
 export JAVA_HOME=$(pwd)/openjdk-${JDK_VERSION}
 export MVN_EXE=$(pwd)/mvn-${MAVEN_VERSION}/bin/mvn
 export PATH=$(pwd)/mvn-${MAVEN_VERSION}/bin:${JAVA_HOME}/bin:$PATH
+export KEYLOCKERTOOLS_DIR=$(pwd)/Keylockertools-linux-x64
+# Keylockertools for digicert codesigning
+curl -LfO https://latestbuilds.service.couchbase.com/buildteam/downloads/digicert/Keylockertools-linux-x64.tar.gz
+tar xzf Keylockertools-linux-x64.tar.gz
+printf "name = DigiCertOnePKCS11\nlibrary = ${KEYLOCKERTOOLS_DIR}/smpkcs11.so\nslotListIndex = 0\n" > ${KEYLOCKERTOOLS_DIR}/pkcs11properties.cfg
+export PATH=${KEYLOCKERTOOLS_DIR}:${PATH}
 
 # Also create a uv-managed python venv for tableau-connector-sdk
 uv venv --python ${PYTHON_VERSION} --managed-python python-${PYTHON_VERSION}
@@ -27,24 +33,7 @@ export PY_EXE=$(pwd)/python-${PYTHON_VERSION}/bin/python3
 
 popd
 
-# Verify the signing cert is still valid BEFORE building -- fail fast, and don't
-# sign with an expired cert. keytool comes from the JDK installed above.
-set +x  # don't echo the keystore password under 'set -x'
-VALID_DATE=$(
-    keytool -list -keystore ~/.digicert.jks -storepass "${DIGICERT_PASSWORD}" -v |
-    grep '^Valid' | head -1 | sed 's/.*until: //'
-)
-set -x
-VALID_TS=$(date -d "${VALID_DATE}" +%s)
-NOW_TS=$(date +%s)
-if [ $NOW_TS -gt $VALID_TS ]; then
-    echo
-    echo
-    echo "ERROR! Signing certificate expired on ${VALID_DATE}!"
-    echo
-    echo
-    echo exit 5
-fi
+cp /tmp/CMakeLists.txt .
 
 # Drive the production build through CMake. -DPRODUCTION_BUILD=ON makes CMake:
 #   1. Stamp versions: connector -> ${VERSION}; JDBC driver and the connector's
@@ -64,7 +53,9 @@ cmake -S . -B build \
     -DVERSION="${VERSION}" \
     -DBLD_NUM="${BLD_NUM}" \
     -DTACO_PYTHON="${PY_EXE}" \
-    -DMAVEN_EXECUTABLE="${MVN_EXE}"
+    -DMAVEN_EXECUTABLE="${MVN_EXE}" \
+    -DDIGICERT_PKCS11CFG=${KEYLOCKERTOOLS_DIR}/pkcs11properties.cfg \
+    -DSM_KEYPAIR_ALIAS="key_1516743357"
 
 cmake --build build
 
