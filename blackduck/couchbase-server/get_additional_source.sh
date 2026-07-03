@@ -171,12 +171,15 @@ fi
 popd
 
 # package-lock.json from an old version of npm, need to regenerate
-cbdep install -d .deps nodejs ${NODEJS_VERSION}
-export PATH=$(pwd)/.deps/nodejs-${NODEJS_VERSION}/bin:$PATH
-pushd cbgt/rest/static/lib/angular-bootstrap
-npm install --legacy-peer-deps
-popd
-rm -rf .deps/nodejs-${NODEJS_VERSION}
+# angular-bootstrap exists before server 8.1.0.
+if [[ -d cbgt/rest/static/lib/angular-bootstrap ]]; then
+  cbdep install -d .deps nodejs ${NODEJS_VERSION}
+  export PATH=$(pwd)/.deps/nodejs-${NODEJS_VERSION}/bin:$PATH
+  pushd cbgt/rest/static/lib/angular-bootstrap
+  npm install --legacy-peer-deps
+  popd
+  rm -rf .deps/nodejs-${NODEJS_VERSION}
+fi
 
 # Delete all the built artifacts so BD doesn't scan them. Do this last
 # as some of the earlier steps may depend on things in the install
