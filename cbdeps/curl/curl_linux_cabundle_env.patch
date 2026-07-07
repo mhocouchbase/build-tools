@@ -1,9 +1,9 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 8e5383ac98..cc569eee3a 100644
+index e459b3d076..72d03f31e5 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -1031,6 +1031,9 @@ if(USE_NGHTTP2)
-   find_package(NGHTTP2)
+@@ -1126,6 +1126,9 @@ if(USE_NGHTTP2)
+   find_package(NGHTTP2 MODULE)
    if(NGHTTP2_FOUND)
      list(APPEND CURL_LIBS CURL::nghttp2)
 +  elseif("${CURL_CA_BUNDLE}" STREQUAL "env")
@@ -12,16 +12,16 @@ index 8e5383ac98..cc569eee3a 100644
    else()
      set(USE_NGHTTP2 OFF)
    endif()
-@@ -1314,7 +1317,7 @@ endif()
- # CA handling
- #
+@@ -1411,7 +1414,7 @@ else()
+ endif()
+ 
  if(_curl_ca_bundle_supported)
 -  set(_ca_opt_desc "Set 'none' to disable or 'auto' for auto-detection. Defaults to 'auto'.")
 +  set(_ca_opt_desc "Set 'none' to disable, 'auto' for auto-detection at build time, or 'env' for runtime setting from CURL_CA_BUNDLE in environment.. Defaults to 'auto'.")
  
    set(CURL_CA_BUNDLE "auto" CACHE
      STRING "Absolute path to the CA bundle. ${_ca_opt_desc}")
-@@ -1330,7 +1333,7 @@ if(_curl_ca_bundle_supported)
+@@ -1427,7 +1430,7 @@ if(_curl_ca_bundle_supported)
    endif()
  
    if(CURL_CA_BUNDLE STREQUAL "")
@@ -31,10 +31,10 @@ index 8e5383ac98..cc569eee3a 100644
      unset(CURL_CA_BUNDLE CACHE)
    elseif(CURL_CA_BUNDLE STREQUAL "auto")
 diff --git a/acinclude.m4 b/acinclude.m4
-index 775102033c..9779c8826d 100644
+index ed8b0499dd..60ab78e1f6 100644
 --- a/acinclude.m4
 +++ b/acinclude.m4
-@@ -1213,7 +1213,7 @@ AS_HELP_STRING([--without-ca-path], [Do not use a default CA path]),
+@@ -1171,7 +1171,7 @@ AS_HELP_STRING([--without-ca-path], [Do not use a default CA path]),
      fi
    fi
  
@@ -43,7 +43,7 @@ index 775102033c..9779c8826d 100644
      ca_warning=""
    fi
  
-@@ -1237,7 +1237,11 @@ AS_HELP_STRING([--without-ca-path], [Do not use a default CA path]),
+@@ -1195,7 +1195,11 @@ AS_HELP_STRING([--without-ca-path], [Do not use a default CA path]),
      capath_warning=""
    fi
  
@@ -54,28 +54,28 @@ index 775102033c..9779c8826d 100644
 +    AC_MSG_RESULT([use environment at runtime])
 +  elif test "x$ca" != "xno"; then
      CURL_CA_BUNDLE="$ca"
-     AC_DEFINE_UNQUOTED(CURL_CA_BUNDLE, "$ca", [Location of default ca bundle])
+     AC_DEFINE_UNQUOTED(CURL_CA_BUNDLE, "$ca", [Location of default CA bundle])
      AC_SUBST(CURL_CA_BUNDLE)
 diff --git a/lib/curl_config-cmake.h.in b/lib/curl_config-cmake.h.in
-index d8d9d7ecbe..faba162415 100644
+index c38caa2a03..ebeb97a0d6 100644
 --- a/lib/curl_config-cmake.h.in
 +++ b/lib/curl_config-cmake.h.in
 @@ -25,6 +25,9 @@
- /* Location of default ca bundle */
+ /* Location of default CA bundle */
  #cmakedefine CURL_CA_BUNDLE "${CURL_CA_BUNDLE}"
  
 +/* Whether to enable specifying CURL_CA_BUNDLE in environment */
 +#cmakedefine CURL_ENABLE_CA_BUNDLE_ENVVAR 1
 +
- /* define "1" to use built-in ca store of TLS backend */
+ /* define "1" to use built-in CA store of TLS backend */
  #cmakedefine CURL_CA_FALLBACK 1
  
-diff --git a/lib/vtls/vtls.c b/lib/vtls/vtls.c
-index be0c032bff..66cc2e8ee3 100644
---- a/lib/vtls/vtls.c
-+++ b/lib/vtls/vtls.c
-@@ -289,7 +289,7 @@ static void free_primary_ssl_config(struct ssl_primary_config *sslc)
- CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data)
+diff --git a/lib/vtls/vtls_config.c b/lib/vtls/vtls_config.c
+index 4a9b69654b..fef38cf941 100644
+--- a/lib/vtls/vtls_config.c
++++ b/lib/vtls/vtls_config.c
+@@ -257,7 +257,7 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
+                                        struct Curl_peer *origin)
  {
    struct ssl_config_data *sslc = &data->set.ssl;
 -#if defined(CURL_CA_PATH) || defined(CURL_CA_BUNDLE)
@@ -83,7 +83,7 @@ index be0c032bff..66cc2e8ee3 100644
    struct UserDefined *set = &data->set;
    CURLcode result;
  #endif
-@@ -306,7 +306,21 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data)
+@@ -276,7 +276,21 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data,
          return result;
      }
  #endif
