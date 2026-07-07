@@ -7,6 +7,10 @@ install_dir=$3
 install_suffix=$4
 version=$5
 
+# Visual Studio solution/project directory under msvc/projects. Change this
+# when moving to a newer Visual Studio toolset (e.g. vc2022 -> vc2025).
+vc_version=vc2022
+
 cd "${root_dir}/jemalloc"
 
 full_args="CC=cl CXX=cl ${configure_args} --prefix=${install_dir} --with-install-suffix=${install_suffix}"
@@ -15,9 +19,9 @@ full_args="CC=cl CXX=cl ${configure_args} --prefix=${install_dir} --with-install
 mkdir -p ${install_dir}/{Release,Debug,ReleaseAssertions}/{bin,lib}/
 
 # Hack the .vcxproj to honor the install_suffix.
-vcxproj="./msvc/projects/vc2017/jemalloc/jemalloc${install_suffix}.vcxproj"
+vcxproj="./msvc/projects/${vc_version}/jemalloc/jemalloc${install_suffix}.vcxproj"
 if [ -n "${install_suffix}" ]; then
-    mv msvc/projects/vc2017/jemalloc/jemalloc.vcxproj "${vcxproj}"
+    mv msvc/projects/${vc_version}/jemalloc/jemalloc.vcxproj "${vcxproj}"
 fi
 
 # Configure build
@@ -45,7 +49,7 @@ msbuild.exe "${vcxproj}" -property:Configuration=Release -maxcpucount
 msbuild.exe "${vcxproj}" -property:Configuration=Debug -maxcpucount
 
 # Copy the build output to the install directory
-pushd msvc/projects/vc2017/jemalloc/x64
+pushd msvc/projects/${vc_version}/jemalloc/x64
 cp -f Release/jemalloc${install_suffix}.dll ${install_dir}/Release/bin/
 cp -f Release/jemalloc${install_suffix}.lib ${install_dir}/Release/lib/
 cp -f Release/jemalloc${install_suffix}.pdb ${install_dir}/Release/lib/
@@ -58,7 +62,7 @@ popd
 # be dropped into a normal Release/RelWithDebInfo build.
 ./autogen.sh ${full_args} --enable-debug
 msbuild.exe "${vcxproj}" -property:Configuration=Release -maxcpucount
-pushd msvc/projects/vc2017/jemalloc/x64
+pushd msvc/projects/${vc_version}/jemalloc/x64
 cp -f Release/jemalloc${install_suffix}.dll ${install_dir}/ReleaseAssertions/bin/
 cp -f Release/jemalloc${install_suffix}.lib ${install_dir}/ReleaseAssertions/lib/
 cp -f Release/jemalloc${install_suffix}.pdb ${install_dir}/ReleaseAssertions/lib/
