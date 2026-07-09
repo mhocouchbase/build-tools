@@ -95,12 +95,19 @@ function repo_init() {
         # that directory
         mirror_arg="--mirror"
     fi
+
+    # CBD-6762, repo v2.65 has compatibility issues with --reference
+    # Stick with the same version as repo launcher to avoid any potential issue related to upgrade
+    # If LAUNCHER_VER is empty or unset, default it to 2.61, which is current version on blackduck_agent
+    LAUNCHER_VER=$(repo --version | awk '/repo launcher version/ {print $4}')
+    LAUNCHER_VER=${LAUNCHER_VER:-2.61}
+
     pushd ~/.reporef
-    repo init --no-repo-verify ${mirror_arg} -u ${url} -b ${branch} -g ${groups} -m ${manifest}
+    repo init --no-repo-verify ${mirror_arg} -u ${url} -b ${branch} -g ${groups} -m ${manifest} --repo-rev="v${LAUNCHER_VER}"
     repo sync -j8
     popd
 
-    repo init --reference ~/.reporef -u ${url} -b ${branch} -g ${groups} -m ${manifest}
+    repo init --reference ~/.reporef -u ${url} -b ${branch} -g ${groups} -m ${manifest} --repo-rev="v${LAUNCHER_VER}"
 }
 
 function clean_git_clone() {
