@@ -498,6 +498,8 @@ class UpdateComponents(ManifestWalker):
         # different spellings in the Knowledgebase later. Also, handle
         # fallback versions now, so that DictDiffer doesn't attempt to
         # handle them later.
+        # Skip empty/None versions as these cause KB errors.
+        original_count = len(versions)
         versions = [
             self.fallback_version_if_necessary(
                 comp_name, comp_id, self.canonicalize_version(
@@ -505,7 +507,13 @@ class UpdateComponents(ManifestWalker):
                 )
             )
             for v in versions
+            if v is not None and str(v).strip()
         ]
+        if len(versions) < original_count:
+            logging.warning(
+                f"Skipped {original_count - len(versions)} empty/None versions "
+                f"for component {comp_name} ({comp_id})"
+            )
 
         logging.debug(
             f"Adding component {comp_name} ({comp_id}) with "

@@ -141,6 +141,13 @@ fi
 
 popd
 
+# Remove gocoverage from go.mod files - it's a local stub for code coverage,
+# not a real shipped dependency. After .git is stripped, Go can't resolve the
+# v0.0.0 pseudo-version for local replaces, so we remove it to avoid scan errors.
+find "${WORKSPACE}/src" -name go.mod -exec sed -i \
+  -e '/github\.com\/couchbase\/gocoverage/d' \
+  {} \;
+
 if [ "6.6.5" = $(printf "6.6.5\n${VERSION}" | sort -n | head -1) ]; then
   # 6.6.5 or higher
   create_analytics_poms
