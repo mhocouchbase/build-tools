@@ -431,7 +431,11 @@ class DockerTool:
             elif self.product in ("couchbase-columnar", "enterprise-analytics"):
                 return "linux/amd64,linux/arm64"
             elif self.product == "couchbase-edge-server":
-                return "linux/amd64"
+                intver = self._intver()
+                if intver >= 10100:
+                    return "linux/amd64,linux/arm64"
+                else:
+                    return "linux/amd64"
 
         # Otherwise, split platform arg on comma and replace any uname-
         # type architectures with Docker-type architectures
