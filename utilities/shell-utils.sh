@@ -109,7 +109,8 @@ function clean_git_clone() {
     # named 'origin' pointing to the specified URL; being checked out to
     # a local branch with the same name as the repository's default
     # branch, tracking that remote branch; and with no local changes
-    local gitrepo=$1
+    #local gitrepo=$1
+    local gitrepo="ssh://git@github.com/mhocouchbase/docker"
     local outdir=$2
 
     if [ -z "${outdir}" ]; then
@@ -139,7 +140,8 @@ function clean_git_clone() {
 
     # Ensure we're up-to-date with the remote's default branch
     git remote set-head origin --auto
-    default_branch=$(basename $(git rev-parse --abbrev-ref origin/HEAD))
+    #default_branch=$(basename $(git rev-parse --abbrev-ref origin/HEAD))
+    default_branch="ea-udf"
 
     # Wipe all local changes
     git reset --hard
