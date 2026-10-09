@@ -38,6 +38,34 @@ create_analytics_poms() {
       --file analytics/cbas/cbas-install/target/bom.txt
 }
 
+replace_unresolvable_local_modules() {
+  # Some modules pull in a remote pseudo-version of another Couchbase
+  # module (eg. cbft -> query), whose go.mod in turn requires a local
+  # module at a placeholder version such as
+  # v0.0.0-00010101000000-000000000000. The replace directive for that
+  # only applies within the remote module, so "go list -m all" (which
+  # Black Duck runs) fails with "unknown revision". "go mod tidy"
+  # doesn't catch this due to module graph pruning. Add a replace
+  # directive pointing to the local checkout for any such module.
+  local modmap="${WORKSPACE}/go-module-dirs.txt"
+  local gomod errs mod target
+  find "${WORKSPACE}/src" -name go.mod -not -path '*/testdata/*' > "${modmap}.list"
+  while read -r gomod; do
+    awk -v dir="$(dirname "${gomod}")" '$1=="module" {print $2 "\t" dir; exit}' "${gomod}"
+  done < "${modmap}.list" > "${modmap}"
+
+  while read -r gomod; do
+    errs=$(cd "$(dirname "${gomod}")" && go list -mod=readonly -m all 2>&1 >/dev/null) || true
+    for mod in $(echo "${errs}" | perl -lne 'm#^go: (\S+)\@v0\.0\.0(-00010101000000-000000000000)?: invalid version# && print $1' | sort -u); do
+      target=$(awk -F'\t' -v mod="${mod}" '$1==mod {print $2; exit}' "${modmap}")
+      if [ -n "${target}" ] && ! grep -q "^replace ${mod} " "${gomod}"; then
+        echo "replace ${mod} => ${target}" >> "${gomod}"
+      fi
+    done
+  done < "${modmap}.list"
+  rm -f "${modmap}" "${modmap}.list"
+}
+
 
 # Main script starts here - decide which action to take based on VERSION
 
@@ -169,6 +197,8 @@ else
   "${SCRIPT_DIR}/go_mod_tidy_pre_morpheus.sh"
   popd
 fi
+
+replace_unresolvable_local_modules
 
 # TEMPORARY: If plasma is pointing to the bad SHA, rewind
 pushd goproj/src/github.com/couchbase/plasma
