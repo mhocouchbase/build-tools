@@ -3,6 +3,7 @@
 import argparse
 import collections
 import dictdiffer
+import fnmatch
 import json
 import logging
 import os
@@ -320,8 +321,11 @@ class UpdateComponents(ManifestWalker):
         self.bd_comp_id_aliases = {}
 
         # "Fallback versions" are those we experimentally determined to be
-        # necessary and saved in bd_aliases.yaml. These should be 1:1.
+        # necessary and saved in bd_aliases.yaml. These should be 1:1, except
+        # for glob patterns such as "1.18.1-*", which are kept per component
+        # ID in file order and only tried if no exact version matches.
         self.bd_comp_version_fallbacks = collections.defaultdict(str)
+        self.bd_comp_version_fallback_patterns = collections.defaultdict(list)
 
         # "Alt-canonical versions" are alternate spellings of canonical version
         # names that are sometimes used by the Knowledgebase. By definition,
@@ -372,17 +376,24 @@ class UpdateComponents(ManifestWalker):
                 "fallback-versions", {}
             ).items():
                 canon_ver = self.canonicalize_version(
-                    comp_name, comp_id, canon_ver
+                    comp_name, comp_id, str(canon_ver)
                 )
-                self.bd_comp_version_fallbacks[
-                    f"{comp_id}::{canon_ver}"
-                ] = fallback_ver
+                if is_version_pattern(canon_ver):
+                    self.bd_comp_version_fallback_patterns[comp_id].append(
+                        (canon_ver, fallback_ver)
+                    )
+                else:
+                    self.bd_comp_version_fallbacks[
+                        f"{comp_id}::{canon_ver}"
+                    ] = fallback_ver
 
         logging.debug(
             f"Loaded {len(self.bd_comp_id_aliases)} "
             "Black Duck component aliases and "
             f"{len(self.bd_comp_version_fallbacks)} "
-            "component fallback versions"
+            "component fallback versions and "
+            f"{sum(len(p) for p in self.bd_comp_version_fallback_patterns.values())} "
+            "fallback version patterns"
         )
 
 
@@ -636,6 +647,13 @@ class UpdateComponents(ManifestWalker):
         fallback_version = self.bd_comp_version_fallbacks.get(
             f"{comp_id}::{version}"
         )
+        if fallback_version is None:
+            fallback_version = next(
+                (fallback for pattern, fallback
+                 in self.bd_comp_version_fallback_patterns.get(comp_id, [])
+                 if fnmatch.fnmatchcase(version, pattern)),
+                None
+            )
         if fallback_version is None:
             # No fallback versions available; do nothing
             return version
@@ -954,6 +972,15 @@ class UpdateComponents(ManifestWalker):
             logging.info("Current components match manifest - no updates needed!")
         else:
             logging.info(f"Updated {actions_taken} components")
+
+
+def is_version_pattern(version):
+    """
+    Returns whether a bd_aliases.yaml fallback version key is a glob pattern
+    (eg. "1.18.1-*") rather than a single version.
+    """
+
+    return any(c in version for c in "*?[")
 
 
 if __name__ == "__main__":

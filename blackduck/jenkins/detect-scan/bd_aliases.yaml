@@ -10,6 +10,11 @@
 #    Black Duck Knowledgebase. update-manual-manifests will fall
 #    back to the value version if the key version is not found when
 #    attempting to add it to the project.
+#
+#    A key may instead be a glob pattern (using *, ? or [...]), eg.
+#    "1.18.1-*", to cover several versions with one fallback. Patterns
+#    are only tried if no key matches the version exactly, in the order
+#    they're listed.
 
 # Microsoft Azure Java Core Library
 "0256aea8-6b56-48ff-8025-879428bf9004":
@@ -35,7 +40,7 @@
 # Apache Parquet Jackson
 "0a80ef0d-524f-4f0c-82a5-466640607df5":
   fallback-versions:
-    "1.18.1-jackson-2.22.3": "1.18.1"
+    "1.18.1-*": "1.18.1"
 
 # Python Programming Language
 "87993177-f099-4a8c-b962-3958dc3e3a3a":

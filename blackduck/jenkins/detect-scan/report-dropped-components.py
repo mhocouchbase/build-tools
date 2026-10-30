@@ -30,6 +30,7 @@ scan.
 """
 
 import argparse
+import fnmatch
 import io
 import json
 import logging
@@ -111,6 +112,7 @@ class DroppedComponentReporter:
 
         self.bd_comp_id_aliases = {}
         self.bd_comp_version_fallbacks = {}
+        self.bd_comp_version_fallback_patterns = {}
         alias_filepath = pathlib.Path(__file__).resolve().parent / "bd_aliases.yaml"
         if not alias_filepath.exists():
             return
@@ -120,9 +122,34 @@ class DroppedComponentReporter:
             for alias_id in comp_data.get("bd-id-aliases", []):
                 self.bd_comp_id_aliases[alias_id] = comp_id
             for version, fallback in comp_data.get("fallback-versions", {}).items():
-                self.bd_comp_version_fallbacks[
-                    f"{comp_id}::{strip_v(str(version))}"
-                ] = str(fallback)
+                version = strip_v(str(version))
+                if any(c in version for c in "*?["):
+                    self.bd_comp_version_fallback_patterns.setdefault(
+                        comp_id, []
+                    ).append((version, str(fallback)))
+                else:
+                    self.bd_comp_version_fallbacks[
+                        f"{comp_id}::{version}"
+                    ] = str(fallback)
+
+
+    def _get_fallback_version(self, comp_id, version):
+        """
+        Returns the bd_aliases.yaml fallback version for a component's version:
+        that of an exact match, else of the first glob pattern it matches (eg.
+        "1.18.1-*"), or None.
+        """
+
+        version = strip_v(version)
+        fallback = self.bd_comp_version_fallbacks.get(f"{comp_id}::{version}")
+        if fallback is not None:
+            return fallback
+        return next(
+            (fallback for pattern, fallback
+             in self.bd_comp_version_fallback_patterns.get(comp_id, [])
+             if fnmatch.fnmatchcase(version, pattern)),
+            None
+        )
 
 
     def _get_declared_dependencies(self):
@@ -480,7 +507,7 @@ class DroppedComponentReporter:
 
         # Suggest the fallback version from bd_aliases.yaml if there is one,
         # else the nearest lower version
-        fallback = self.bd_comp_version_fallbacks.get(f"{comp_id}::{strip_v(version)}")
+        fallback = self._get_fallback_version(comp_id, version)
         if fallback is not None:
             if self._find_component_version(comp_id, fallback) is not None:
                 result["suggestion"] = fallback
