@@ -187,6 +187,21 @@ if [ "x${DRY_RUN}" = "xtrue" ]; then
   exit
 fi
 
+# Report any dependencies Black Duck silently dropped from the BOM because
+# their version isn't in the Knowledgebase, and write a Black Duck manifest of
+# stand-in versions for them, which update-manual-manifest.py below then adds.
+# Never fails the scan. Remove any manifest from an earlier run first, so a
+# failed check can't add stale stand-ins.
+echo "Checking for dependencies dropped from the BOM"
+DROPPED_MANIFEST="${WORKSPACE}/dropped-components/${PRODUCT}-black-duck-manifest.yaml"
+rm -f "${DROPPED_MANIFEST}"
+uv run --project "${DETECT_SCRIPT_DIR}" --quiet \
+  "${DETECT_SCRIPT_DIR}/report-dropped-components.py" \
+    --credentials ~/.ssh/blackduck-creds.json \
+    -p ${PRODUCT} -v ${VERSION} \
+    --manifest "${DROPPED_MANIFEST}" \
+  || echo "WARNING: could not check for dropped dependencies"
+
 # If there's product-specific manual Black Duck manifests, load that as well
 echo "Loading product-specific Black Duck manifests"
 uv run --project "${DETECT_SCRIPT_DIR}" --quiet \
