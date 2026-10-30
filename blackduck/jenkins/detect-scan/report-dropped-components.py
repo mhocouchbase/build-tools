@@ -16,6 +16,15 @@ stand-ins. Run this before update-manual-manifest.py, with the manifest under
 its --src-root, and it adds them to the BOM as manually-added components, so
 the dependencies still appear in reports and notices.
 
+A stand-in brings its own vulnerabilities into the BOM. With --bdsa, it checks
+each of them against the affected version ranges of the related BDSA (Black
+Duck Security Advisory), and reports which ones likely don't affect the
+dependency's real version. With --bdsa-stand-ins, it also uses those ranges
+to choose the nearest lower version: of the closest few, the one whose
+vulnerabilities best match the real version's. This works whichever
+vulnerability source Black Duck shows by default, as each NVD vulnerability
+links to its related BDSA.
+
 Run this after the scan is complete. It is best effort: it never fails the
 scan.
 """
@@ -48,7 +57,14 @@ class DroppedComponentReporter:
     # Number of dependencies to check against the Knowledgebase at once
     kb_threads = 16
 
-    def __init__(self, credentials_file, project, version):
+    # Media type for full vulnerability records, including BDSA ranges
+    vuln_media_type = "application/vnd.blackducksoftware.vulnerability-4+json"
+
+    def __init__(self, credentials_file, project, version,
+                 bdsa=False, bdsa_stand_ins=False):
+
+        self.bdsa = bdsa or bdsa_stand_ins
+        self.bdsa_stand_ins = bdsa_stand_ins
 
         with open(credentials_file, "r") as c:
             creds = json.load(c)
@@ -77,6 +93,12 @@ class DroppedComponentReporter:
         # <component_id>::<version prefix>
         self.kb_components = {}
         self.kb_versions = {}
+
+        # Vulnerability lookups cached across dependencies: each stand-in
+        # version's vulnerabilities keyed by its URL, and each BDSA's name and
+        # affected ranges keyed by its URL
+        self.version_vulns = {}
+        self.bdsa_ranges = {}
 
         self._load_bd_aliases()
 
@@ -225,6 +247,127 @@ class DroppedComponentReporter:
         return None
 
 
+    def _get_vulnerabilities(self, version_url):
+        """
+        Returns the vulnerabilities of a Knowledgebase component version, as
+        a list of dicts: "name" (as the BOM shows it, eg. a CVE when NVD is
+        the default source), "severity", and "bdsa-url" (the related BDSA's
+        URL, or None if there isn't one).
+        """
+
+        if version_url not in self.version_vulns:
+            vulns = []
+            for item in self.client.get_items(f"{version_url}/vulnerabilities"):
+                links = {
+                    link["rel"]: link["href"]
+                    for link in item["_meta"]["links"]
+                }
+                vulns.append({
+                    "name": item["name"],
+                    "severity": item.get("severity"),
+                    "bdsa-url": item["_meta"]["href"]
+                        if item.get("source") == "BDSA"
+                        else links.get("related-affecting-vulnerability"),
+                })
+            self.version_vulns[version_url] = vulns
+        return self.version_vulns[version_url]
+
+
+    def _get_bdsa_ranges(self, bdsa_url):
+        """
+        Returns a BDSA's name and its affected version ranges, as a list of
+        (component ID, first affected version, last affected version).
+        """
+
+        if bdsa_url not in self.bdsa_ranges:
+            headers = {"Accept": self.vuln_media_type}
+            bdsa = self.client.get_json(bdsa_url, headers=headers)
+            links = {
+                link["rel"]: link["href"]
+                for link in bdsa["_meta"]["links"]
+            }
+            ranges = []
+            if "bdsa-ranges" in links:
+                for r in self.client.get_items(links["bdsa-ranges"], headers=headers):
+                    comp_links = {
+                        link["rel"]: link["href"]
+                        for link in r["_meta"]["links"]
+                    }
+                    comp_id = urlparse(comp_links.get("component", "")).path.rsplit("/", 1)[-1]
+                    ranges.append((
+                        self.bd_comp_id_aliases.get(comp_id, comp_id),
+                        r.get("versionStart"),
+                        r.get("versionEnd")
+                    ))
+            self.bdsa_ranges[bdsa_url] = (bdsa["name"], ranges)
+        return self.bdsa_ranges[bdsa_url]
+
+
+    def _check_vulnerabilities(self, comp_id, version_url, real_version):
+        """
+        Checks each vulnerability of a stand-in version against the dependency's
+        real version, using the related BDSA's affected ranges for the
+        component. Returns a list of dicts: "name", "bdsa" (or None),
+        "severity", and "status": "affected" if a range includes the real
+        version, "stand-in only" if none does, or "unknown" if there's no
+        BDSA, range or comparable version to go on.
+        """
+
+        real = version_key(real_version)
+        results = []
+        for vuln in self._get_vulnerabilities(version_url):
+            result = {
+                "name": vuln["name"],
+                "bdsa": None,
+                "severity": vuln["severity"],
+                "status": "unknown",
+            }
+            results.append(result)
+            if vuln["bdsa-url"] is None:
+                continue
+            result["bdsa"], ranges = self._get_bdsa_ranges(vuln["bdsa-url"])
+            bounds = [
+                (version_key(start), version_key(end))
+                for range_comp_id, start, end in ranges
+                if range_comp_id == comp_id
+            ]
+            bounds = [(s, e) for s, e in bounds if s is not None and e is not None]
+            if real is None or not bounds:
+                continue
+            result["status"] = (
+                "affected" if any(s <= real <= e for s, e in bounds)
+                else "stand-in only"
+            )
+        return results
+
+
+    def _best_bdsa_match(self, comp_id, candidates, version):
+        """
+        Given candidate stand-ins as (version name, version URL), highest
+        first, returns the name of the one whose vulnerabilities best match
+        the real version's, by BDSA ranges: the fewest that don't affect the
+        real version, plus those affecting it that other candidates have but
+        it lacks. Ties go to the highest version.
+        """
+
+        checked = [
+            (name, self._check_vulnerabilities(comp_id, url, version))
+            for name, url in candidates
+        ]
+        affecting = {
+            v["name"] for _, vulns in checked for v in vulns
+            if v["status"] == "affected"
+        }
+
+        def mismatches(vulns):
+            stand_in_only = sum(1 for v in vulns if v["status"] == "stand-in only")
+            has = {v["name"] for v in vulns if v["status"] == "affected"}
+            return stand_in_only + len(affecting - has)
+
+        # min() keeps the first, ie. highest, of equally good candidates
+        return min(checked, key=lambda c: mismatches(c[1]))[0]
+
+
     def _find_nearest_lower_version(
         self, comp_name, comp_id, namespace, base, sep, version
     ):
@@ -235,8 +378,9 @@ class DroppedComponentReporter:
         version, then a 1.x one). Candidates come from the component's
         versions, but each must also be known for the dependency's own
         external ID (base + sep + version): one component can cover several
-        separately-versioned modules, eg. google-cloud-go. Returns None if
-        there is none.
+        separately-versioned modules, eg. google-cloud-go. With
+        --bdsa-stand-ins, picks the best BDSA match of the highest few
+        instead (see _best_bdsa_match()). Returns None if there is none.
         """
 
         match = self.release_re.match(version)
@@ -270,12 +414,20 @@ class DroppedComponentReporter:
                     candidates.append((numbers, name))
 
             # Check the highest few against the dependency's own external ID
+            known_candidates = []
             for _, name in sorted(candidates, reverse=True)[:5]:
                 if v_prefix and not name.startswith("v"):
                     name = v_prefix + name
                 known = self._find_known_version(namespace, f"{base}{sep}{name}")
                 if known is not None and comp_id in known["component"]:
-                    return known["versionName"]
+                    if not self.bdsa_stand_ins:
+                        return known["versionName"]
+                    known_candidates.append(
+                        (known["versionName"], known["version"])
+                    )
+
+            if known_candidates:
+                return self._best_bdsa_match(comp_id, known_candidates, version)
 
         return None
 
@@ -346,9 +498,20 @@ class DroppedComponentReporter:
                 result["component"], comp_id, namespace, base, sep, version
             )
             result["reason"] = (
-                "nearest lower version" if result["suggestion"]
-                else "no earlier version in the Knowledgebase"
+                "no earlier version in the Knowledgebase"
+                if not result["suggestion"]
+                else "nearest lower version, best BDSA match"
+                if self.bdsa_stand_ins
+                else "nearest lower version"
             )
+
+        # Check the stand-in's vulnerabilities against the real version
+        if self.bdsa and result["suggestion"]:
+            version_url = self._find_component_version(comp_id, result["suggestion"])
+            if version_url is not None:
+                result["vulnerabilities"] = self._check_vulnerabilities(
+                    comp_id, version_url, version
+                )
 
         return result
 
@@ -445,6 +608,35 @@ def strip_v(version):
     return re.sub(r"^v(?=[0-9])", "", version)
 
 
+# Match a version number with an optional suffix, eg. "2.19.0-rc2", capturing
+# its dotted numeric part and suffix; and a pre-release suffix, eg. "rc2"
+version_re = re.compile(r"^v?([0-9]+(?:\.[0-9]+)*)(?:[.-]?([A-Za-z][A-Za-z0-9.-]*))?$")
+prerelease_re = re.compile(
+    r"^(alpha|beta|a|b|rc|cr|m|milestone|pre|preview|dev)[.-]?([0-9]*)",
+    re.IGNORECASE
+)
+
+
+def version_key(version):
+    """
+    Returns a key for comparing version numbers as BDSA ranges do, or None if
+    it isn't one, eg. "2.19.0-rc2" < "2.19.0" == "2.19" == "2.19.0.Final" <
+    "2.19.1". Pre-release suffixes sort before the release, others are
+    ignored.
+    """
+
+    match = version_re.match(version or "")
+    if not match:
+        return None
+    numbers = [int(n) for n in match[1].split(".")]
+    while len(numbers) > 1 and numbers[-1] == 0:
+        numbers.pop()
+    pre = prerelease_re.match(match[2] or "")
+    if pre:
+        return (numbers, 0, pre[1].lower(), int(pre[2] or 0))
+    return (numbers, 1, "", 0)
+
+
 def log_report(project, version, dropped):
     """
     Logs the dropped dependencies, those with a suggested stand-in first.
@@ -470,6 +662,8 @@ def log_report(project, version, dropped):
                 f"      -> {d['component']} {d['suggestion']} "
                 f"({d['reason']}; bd-id {d['bd-id']})"
             )
+            if "vulnerabilities" in d:
+                lines.append(f"         {vulnerability_summary(d['vulnerabilities'])}")
     if without:
         lines.append("")
         lines.append(f"Without a suggested stand-in ({len(without)}):")
@@ -477,6 +671,36 @@ def log_report(project, version, dropped):
             component = f"{d['component']}: " if d["component"] else ""
             lines.append(f"  {d['dependency']}  ({component}{d['reason']})")
     logging.warning("\n".join(lines))
+
+
+def vulnerability_summary(vulns):
+    """
+    Summarises a stand-in's checked vulnerabilities (see
+    _check_vulnerabilities()), naming those that likely don't affect the real
+    version, eg. "BDSA: 2 of 5 stand-in vulnerabilities likely don't affect
+    the real version: CVE-2026-91777 (BDSA-2026-32583), ...".
+    """
+
+    if not vulns:
+        return "BDSA: stand-in has no vulnerabilities"
+    stand_in_only = [v for v in vulns if v["status"] == "stand-in only"]
+    unknown = sum(1 for v in vulns if v["status"] == "unknown")
+    summary = (
+        f"BDSA: {len(stand_in_only)} of {len(vulns)} stand-in vulnerabilities "
+        "likely don't affect the real version"
+    )
+    if stand_in_only:
+        names = [
+            f"{v['name']} ({v['bdsa']})" if v["bdsa"] and v["bdsa"] != v["name"]
+            else v["name"]
+            for v in stand_in_only
+        ]
+        if len(names) > 10:
+            names = names[:10] + [f"and {len(names) - 10} more"]
+        summary += ": " + ", ".join(names)
+    if unknown:
+        summary += f"; {unknown} couldn't be checked"
+    return summary
 
 
 if __name__ == "__main__":
@@ -497,6 +721,12 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--manifest',
         help="Write a black-duck-manifest of the suggested stand-ins to this "
              "file, for update-manual-manifest.py to add to the BOM")
+    parser.add_argument('--bdsa', action='store_true',
+        help="Report which of each stand-in's vulnerabilities likely don't "
+             "affect the real version, by BDSA affected ranges")
+    parser.add_argument('--bdsa-stand-ins', action='store_true',
+        help="Choose nearest lower stand-ins by how well their "
+             "vulnerabilities match the real version's (implies --bdsa)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -510,7 +740,8 @@ if __name__ == "__main__":
     # Best effort: never fail the scan
     try:
         reporter = DroppedComponentReporter(
-            args.credentials, args.project, args.version
+            args.credentials, args.project, args.version,
+            bdsa=args.bdsa, bdsa_stand_ins=args.bdsa_stand_ins
         )
         dropped = reporter.report()
     except Exception as e:
