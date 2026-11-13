@@ -216,11 +216,11 @@ upload()
         echo Uploading ${RELEASE_DIRNAME} ...
         echo CE are uploaded PRIVATELY ...
         perm_arg="private"
-        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl private --exclude "*" --include "*community*"
-        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl public-read --exclude "*community*"
+        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl private --exclude "*" --include "*community*" --no-overwrite
+        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl public-read --exclude "*community*" --no-overwrite
     else
         echo Uploading ${RELEASE_DIRNAME} ...
-        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl public-read
+        aws s3 sync ${UPLOAD_TMP_DIR} ${S3_DIR}/ --acl public-read --no-overwrite
     fi
 
     echo Copying ${UPLOAD_TMP_DIR} to ${RELEASE_DIR} ...
